@@ -3,11 +3,11 @@ const app = express();
 const port = 3000;
 const api = require('../util/api');
 const config = require("../config/config");
+const {Log} = require("../util/common");
 
 // IP 白名单过滤中间件
 const ipFilterMiddleware = (req, res, next) => {
     const clientIp = req.ip.match(/\d+\.\d+\.\d+\.\d+/);
-    // console.log(clientIp);
     if (config.WHITE_IP_CONFIG.includes(clientIp[0])) { // IP 在白名单中，继续处理请求
         next();
     } else {
@@ -17,6 +17,8 @@ const ipFilterMiddleware = (req, res, next) => {
 };
 
 app.use(ipFilterMiddleware);
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
 app.get('/', (req, res) => {
     res.send('Hello World!')
@@ -49,6 +51,7 @@ app.post('/message', async (req, res) => {
         params.symbol = body["symbol"];
         params.quantity = body["quantity"];
         params.type = 'market'; // 下单类型，可以是market或limit
+        Log(`symbol:${params.symbol}|side: long|quantity: ${params.quantity}`);
 
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
@@ -61,65 +64,62 @@ app.post('/message', async (req, res) => {
                 qntStr = curPositionListElement["positionAmt"]
             }
         }
+        Log(`symbol:${params.symbol}|infoQnt: ${qntStr}|curPosition: ${curPosition}`);
         switch (body.action) {
             case "long":
                 // 建多仓前先清掉之前的空仓
                 if (curPosition < 0) {
-                    // 先取消之前的订单
-                    await api.cancelOrder({
-                        symbol: params.symbol
-                    });
                     await api.placeOrder({
                         symbol: params.symbol,
                         side: "BUY",
                         type: "market",
-                        quantity: qntStr
+                        quantity: curPosition * -1
                     });
+                    Log(`close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
                 }
                 params.side = "BUY";
                 break;
             case "short":
                 // 建多仓前先清掉之前的空仓
                 if (curPosition > 0) {
-                    // 先取消之前的订单
-                    await api.cancelOrder({
-                        symbol: params.symbol
-                    });
                     await api.placeOrder({
                         symbol: params.symbol,
                         side: "SELL",
                         type: "market",
-                        quantity: qntStr
+                        quantity: curPosition
                     });
                 }
                 params.side = "SELL";
                 break;
             case "closebuy":
                 if (curPosition > 0) {
-                    params.quantity = qntStr;
+                    params.quantity = curPosition;
                     params.side = "SELL";
                 } else {
-                    console.log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
+                    Log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
                     res.send(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
+                    return;
                 }
                 break;
             case "closesell":
                 if (curPosition < 0) {
-                    params.quantity = qntStr;
+                    params.quantity = curPosition * -1;
                     params.side = "BUY";
                 } else {
-                    console.log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
+                    Log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
                     res.send(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
+                    return;
                 }
                 break;
+            default:
+                Log(`order action error|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
+                res.status(400).send(`order action error|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
+                return;
         }
-        // 先取消之前的订单
-        await api.cancelOrder({
-            symbol: params.symbol
-        });
+
         // 下单
         await api.placeOrder(params);
-
+        Log(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
         res.send(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
     } catch (error) {
         res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side: ${req.body["action"]}|quantity: ${req.body['quantity']}`);
@@ -127,5 +127,5 @@ app.post('/message', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
+    Log(`Example app listening on port ${port}`)
 });

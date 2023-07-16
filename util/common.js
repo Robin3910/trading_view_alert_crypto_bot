@@ -1,5 +1,9 @@
 const axios = require('axios');
 
+function Log(str){
+    console.log(`${new Date()}|${str}`);
+}
+
 function transTimeStampToDate(timeStamp) {
     const date = new Date(timeStamp);
     const Y = date.getFullYear() + '-';
@@ -30,5 +34,6 @@ function notifyToPhone(tradeType, content) {
 
 module.exports = {
     transTimeStampToDate,
-    notifyToPhone
+    notifyToPhone,
+    Log
 }
