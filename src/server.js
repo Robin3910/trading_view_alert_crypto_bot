@@ -1,9 +1,9 @@
 const express = require('express');
 const app = express();
-const port = 3000;
 const api = require('../util/api');
 const config = require("../config/config");
 const {Log, notifyToPhone} = require("../util/common");
+const port = config.PORT;
 
 // IP 白名单过滤中间件
 const ipFilterMiddleware = (req, res, next) => {

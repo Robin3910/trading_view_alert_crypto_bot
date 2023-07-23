@@ -2,6 +2,7 @@
 const GRID_DIRECTION = 1;
 const API_KEY = '';
 const SECRET_KEY = '';
+const PORT = 443;
 const COIN = 'ethusdt';
 const GRID_TOP_PRICE = 2000;
 const GRID_BOTTOM_PRICE = 1750;
@@ -19,6 +20,7 @@ const LOG_FILE_PATH = './log.txt';
 const GRID_DATA = './data.json';
 const NOTIFY_COUNTDOWN = 60;
 module.exports = {
+    PORT,
     GRID_PERCENT,
     INIT_MONEY,
     GRID_TOP_PRICE,
