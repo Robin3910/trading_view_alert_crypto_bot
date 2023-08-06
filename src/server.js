@@ -1,9 +1,9 @@
 const express = require('express');
 const app = express();
-const port = 3000;
 const api = require('../util/api');
 const config = require("../config/config");
-const {Log} = require("../util/common");
+const {Log, notifyToPhone} = require("../util/common");
+const port = config.PORT;
 
 // IP 白名单过滤中间件
 const ipFilterMiddleware = (req, res, next) => {
@@ -138,6 +138,7 @@ app.post('/message', async (req, res) => {
         // 下单
         await api.placeOrder(params);
         Log(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
+        notifyToPhone(`binance_symbol_${params.symbol}_side_${body["action"]}`)
         res.send(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
     } catch (error) {
         res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side: ${req.body["action"]}|quantity: ${req.body['quantity']}`);
