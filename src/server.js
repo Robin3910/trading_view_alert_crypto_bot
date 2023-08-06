@@ -36,21 +36,39 @@ app.get('/account', async (req, res) => {
     const data = await api.getAccount();
     res.send(data);
 });
+// calc precision
+function calculateQuantityPrecision(price) {
+    // 获取价格的小数点位数
+    const decimalCount = price.toString().split('.')[1]?.length || 0;
+
+    // 根据规则计算quantity的精度
+    if (decimalCount >= 3) {
+        return 0; // 精度到个位
+    } else if (decimalCount === 2) {
+        return 1; // 精度到一位小数点
+    } else {
+        return 2; // 精度到两位小数点
+    }
+}
 
 // 合约买入接口
-// action: long/short/close_buy/close_sell
+// action: long/short/closebuy/closesell
 // {
-//     "action": "long/short/close_buy/close_sell",
-//     "symbol": "BTCUSDT",
-//     "quantity": "0.001",
+//     "action": "long/short/closebuy/closesell",
+//     "symbol": "COMPUSDT",
+//     "quantity": "0.1",
+//     "price": 57.26
 // }
 app.post('/message', async (req, res) => {
     try {
         const body = req.body;
         const params = {};
         params.symbol = body["symbol"];
-        params.quantity = body["quantity"];
+        // params.quantity = body["quantity"];
         params.type = 'market'; // 下单类型，可以是market或limit
+        let price = body["price"];
+        const precision = calculateQuantityPrecision(price);
+        params.quantity = Number(body["quantity"]).toFixed(precision);
         Log(`symbol:${params.symbol}|side: long|quantity: ${params.quantity}`);
 
         // 获取账户信息，查看当前是否有持仓
