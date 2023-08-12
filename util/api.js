@@ -143,7 +143,6 @@ async function getAccount() {
  * 撤销订单接口
  * @param params
  * symbol: ethusdt
- * orderId: 8389765524817242182
  * @returns {AxiosPromise}
  */
 function cancelOrder(params) {
@@ -159,7 +158,7 @@ function cancelOrder(params) {
                 'Content-Type': 'application/json',
                 'X-MBX-APIKEY': CONFIG.API_KEY,
             },
-            url: `https://fapi.binance.com/fapi/v1/order?${queryString}`,
+            url: `https://fapi.binance.com/fapi/v1/allOpenOrders?${queryString}`,
         };
 
         axios(config)

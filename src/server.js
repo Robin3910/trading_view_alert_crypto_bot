@@ -3,6 +3,7 @@ const app = express();
 const api = require('../util/api');
 const config = require("../config/config");
 const {Log, notifyToPhone} = require("../util/common");
+const {cancelOrder} = require("../util/api");
 const port = config.PORT;
 
 // IP 白名单过滤中间件
@@ -68,7 +69,7 @@ app.post('/message', async (req, res) => {
         let price = body["price"];
         const precision = calculateQuantityPrecision(price);
         params.quantity = Number(body["quantity"]).toFixed(precision);
-        Log(`symbol:${params.symbol}|side: long|quantity: ${params.quantity}`);
+        Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}`);
 
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
@@ -112,6 +113,7 @@ app.post('/message', async (req, res) => {
                 if (curPosition > 0) {
                     params.quantity = curPosition;
                     params.side = "SELL";
+                    await cancelOrder({symbol: params.symbol});
                 } else {
                     Log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
                     res.send(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
@@ -122,6 +124,7 @@ app.post('/message', async (req, res) => {
                 if (curPosition < 0) {
                     params.quantity = curPosition * -1;
                     params.side = "BUY";
+                    await cancelOrder({symbol: params.symbol});
                 } else {
                     Log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
                     res.send(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
@@ -142,18 +145,16 @@ app.post('/message', async (req, res) => {
             await api.placeOrder({
                 symbol: params.symbol,
                 side: body.action === "long" ? "SELL" : "BUY",
-                type: "STOP",
+                type: "STOP_MARKET",
                 stopPrice: body.action === "long" ? body["price"] * (1 - config.STOP_LOSS): body["price"] * (1 + config.STOP_LOSS),
-                price: body.action === "long" ?  body["price"] * (1 - config.STOP_LOSS): body["price"] * (1 + config.STOP_LOSS),
                 quantity: params.quantity
             });
             // 止盈单
             await api.placeOrder({
                 symbol: params.symbol,
                 side: body.action === "long" ? "SELL" : "BUY",
-                type: "TAKE_PROFIT",
+                type: "TAKE_PROFIT_MARKET",
                 stopPrice: body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT) : body["price"] * (1 - config.STOP_PROFIT),
-                price: body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT) : body["price"] * (1 - config.STOP_PROFIT),
                 quantity: params.quantity
             });
         }
