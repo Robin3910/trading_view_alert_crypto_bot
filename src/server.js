@@ -154,14 +154,14 @@ app.post('/message', async (req, res) => {
                 symbol: params.symbol,
                 side: body.action === "long" ? "SELL" : "BUY",
                 type: "STOP_MARKET",
-                stopPrice: body.action === "long" ? body["price"] * (1 - config.STOP_LOSS).toFixed(pricePrecision) : body["price"] * (1 + config.STOP_LOSS).toFixed(pricePrecision),
+                stopPrice: body.action === "long" ? (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision),
             });
             // 止盈单
             await api.placeOrder({
                 symbol: params.symbol,
                 side: body.action === "long" ? "SELL" : "BUY",
                 type: "TAKE_PROFIT_MARKET",
-                stopPrice: body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT).toFixed(pricePrecision) : body["price"] * (1 - config.STOP_PROFIT).toFixed(pricePrecision),
+                stopPrice: body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision),
             });
         }
         Log(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
