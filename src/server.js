@@ -76,7 +76,7 @@ app.post('/message', async (req, res) => {
         const precision = calculateQuantityPrecision(price);
         const pricePrecision = calculatePricePrecision(price);
         params.quantity = Number(body["quantity"]).toFixed(precision);
-        Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}`);
+        Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}|qty precision: ${precision}|price precision: ${pricePrecision}`);
 
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
@@ -148,9 +148,7 @@ app.post('/message', async (req, res) => {
         await api.placeOrder(params);
         // 开仓就挂上止盈止损单
         if (body.action === "long" || body.action === "short") {
-            Log(`SL/TP|symbol: ${params.symbol}|side: ${body.action === "long" ? "SELL" : "BUY"}|sl:
-             ${body.action === "long" ? body["price"] * (1 - config.STOP_LOSS).toFixed(pricePrecision) : body["price"] * (1 + config.STOP_LOSS).toFixed(pricePrecision)}|TP:
-             ${body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT).toFixed(pricePrecision) : body["price"] * (1 - config.STOP_PROFIT).toFixed(pricePrecision)}`);
+            Log(`SL/TP|symbol: ${params.symbol}|side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ? body["price"] * (1 - config.STOP_LOSS).toFixed(pricePrecision) : body["price"] * (1 + config.STOP_LOSS).toFixed(pricePrecision)}|TP:${body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT).toFixed(pricePrecision) : body["price"] * (1 - config.STOP_PROFIT).toFixed(pricePrecision)}`);
             // 止损单
             await api.placeOrder({
                 symbol: params.symbol,
