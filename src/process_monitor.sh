@@ -6,9 +6,7 @@ do
 	if [ $monitor -eq 0 ] 
 	then
 		echo "Manipulator program is not running, restart Manipulator"
-		nohup node main.js > node.out &
-	else
-		echo "Manipulator program is running"
+		nohup node server.js > node.out &
 	fi
 	sleep 5
 done

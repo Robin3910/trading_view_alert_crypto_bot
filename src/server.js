@@ -148,20 +148,24 @@ app.post('/message', async (req, res) => {
         await api.placeOrder(params);
         // 开仓就挂上止盈止损单
         if (body.action === "long" || body.action === "short") {
-            Log(`SL/TP|symbol: ${params.symbol}|side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ? body["price"] * (1 - config.STOP_LOSS).toFixed(pricePrecision) : body["price"] * (1 + config.STOP_LOSS).toFixed(pricePrecision)}|TP:${body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT).toFixed(pricePrecision) : body["price"] * (1 - config.STOP_PROFIT).toFixed(pricePrecision)}`);
+            Log(`SL/TP|symbol: ${params.symbol}|stop side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ?  (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision)}|TP:${body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision)}`);
             // 止损单
             await api.placeOrder({
                 symbol: params.symbol,
                 side: body.action === "long" ? "SELL" : "BUY",
-                type: "STOP_MARKET",
+                type: "STOP",
                 stopPrice: body.action === "long" ? (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision),
+                price: body.action === "long" ? (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision),
+                quantity: params.quantity
             });
             // 止盈单
             await api.placeOrder({
                 symbol: params.symbol,
                 side: body.action === "long" ? "SELL" : "BUY",
-                type: "TAKE_PROFIT_MARKET",
+                type: "TAKE_PROFIT",
                 stopPrice: body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision),
+                price: body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision),
+                quantity: params.quantity
             });
         }
         Log(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
