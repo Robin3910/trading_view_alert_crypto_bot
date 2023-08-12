@@ -55,7 +55,11 @@ function calculateQuantityPrecision(price) {
 
 function calculatePricePrecision(price) {
     // 获取价格的小数点位数
-    return price.toString().split('.')[1]?.length || 0;
+    let precision = price.toString().split('.')[1]?.length || 0;
+    if (precision >= 4) {
+        precision = 4;
+    }
+    return precision;
 }
 
 // 合约买入接口
