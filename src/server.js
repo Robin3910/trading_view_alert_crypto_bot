@@ -37,6 +37,7 @@ app.get('/account', async (req, res) => {
     const data = await api.getAccount();
     res.send(data);
 });
+
 // calc precision
 function calculateQuantityPrecision(price) {
     // 获取价格的小数点位数
@@ -50,6 +51,11 @@ function calculateQuantityPrecision(price) {
     } else {
         return 2; // 精度到两位小数点
     }
+}
+
+function calculatePricePrecision(price) {
+    // 获取价格的小数点位数
+    return price.toString().split('.')[1]?.length || 0;
 }
 
 // 合约买入接口
@@ -68,6 +74,7 @@ app.post('/message', async (req, res) => {
         params.type = 'market'; // 下单类型，可以是market或limit
         let price = body["price"];
         const precision = calculateQuantityPrecision(price);
+        const pricePrecision = calculatePricePrecision(price);
         params.quantity = Number(body["quantity"]).toFixed(precision);
         Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}`);
 
@@ -146,7 +153,7 @@ app.post('/message', async (req, res) => {
                 symbol: params.symbol,
                 side: body.action === "long" ? "SELL" : "BUY",
                 type: "STOP_MARKET",
-                stopPrice: body.action === "long" ? body["price"] * (1 - config.STOP_LOSS): body["price"] * (1 + config.STOP_LOSS),
+                stopPrice: body.action === "long" ? body["price"] * (1 - config.STOP_LOSS).toFixed(pricePrecision) : body["price"] * (1 + config.STOP_LOSS).toFixed(pricePrecision),
                 quantity: params.quantity
             });
             // 止盈单
@@ -154,7 +161,7 @@ app.post('/message', async (req, res) => {
                 symbol: params.symbol,
                 side: body.action === "long" ? "SELL" : "BUY",
                 type: "TAKE_PROFIT_MARKET",
-                stopPrice: body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT) : body["price"] * (1 - config.STOP_PROFIT),
+                stopPrice: body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT).toFixed(pricePrecision) : body["price"] * (1 - config.STOP_PROFIT).toFixed(pricePrecision),
                 quantity: params.quantity
             });
         }
