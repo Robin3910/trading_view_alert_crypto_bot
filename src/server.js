@@ -17,7 +17,7 @@ const ipFilterMiddleware = (req, res, next) => {
 };
 
 app.use(ipFilterMiddleware);
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({extended: true}));
 app.use(express.json());
 
 app.get('/', (req, res) => {
@@ -64,7 +64,6 @@ app.post('/message', async (req, res) => {
         const body = req.body;
         const params = {};
         params.symbol = body["symbol"];
-        // params.quantity = body["quantity"];
         params.type = 'market'; // 下单类型，可以是market或limit
         let price = body["price"];
         const precision = calculateQuantityPrecision(price);
@@ -137,6 +136,27 @@ app.post('/message', async (req, res) => {
 
         // 下单
         await api.placeOrder(params);
+        // 开仓就挂上止盈止损单
+        if (body.action === "long" || body.action === "short") {
+            // 止损单
+            await api.placeOrder({
+                symbol: params.symbol,
+                side: body.action === "long" ? "SELL" : "BUY",
+                type: "STOP",
+                stopPrice: body.action === "long" ? body["price"] * (1 - config.STOP_LOSS): body["price"] * (1 + config.STOP_LOSS),
+                price: body.action === "long" ?  body["price"] * (1 - config.STOP_LOSS): body["price"] * (1 + config.STOP_LOSS),
+                quantity: params.quantity
+            });
+            // 止盈单
+            await api.placeOrder({
+                symbol: params.symbol,
+                side: body.action === "long" ? "SELL" : "BUY",
+                type: "TAKE_PROFIT",
+                stopPrice: body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT) : body["price"] * (1 - config.STOP_PROFIT),
+                price: body.action === "long" ? body["price"] * (1 + config.STOP_PROFIT) : body["price"] * (1 - config.STOP_PROFIT),
+                quantity: params.quantity
+            });
+        }
         Log(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
         notifyToPhone(`binance_symbol_${params.symbol}_side_${body["action"]}`)
         res.send(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
