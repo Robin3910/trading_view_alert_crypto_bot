@@ -38,7 +38,7 @@ service.interceptors.response.use(
         console.log(response.data);
         return Promise.resolve(response.data);
     },error => {
-        console.log('err' + error)// for debug
+        console.log('err: ' + error)// for debug
         return Promise.reject(error)
     })
 
