@@ -96,6 +96,12 @@ app.post('/message', async (req, res) => {
         Log(`symbol:${params.symbol}|infoQnt: ${qntStr}|curPosition: ${curPosition}`);
         switch (body.action) {
             case "long":
+                // 如果仓位存在，则跳过
+                if (curPosition > 0) {
+                    Log(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                    res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                    return;
+                }
                 // 建多仓前先清掉之前的空仓
                 if (curPosition < 0) {
                     await api.placeOrder({
@@ -109,6 +115,12 @@ app.post('/message', async (req, res) => {
                 params.side = "BUY";
                 break;
             case "short":
+                // 如果仓位存在，则跳过
+                if (curPosition < 0) {
+                    Log(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                    res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                    return;
+                }
                 // 建多仓前先清掉之前的空仓
                 if (curPosition > 0) {
                     await api.placeOrder({
