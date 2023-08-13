@@ -34,6 +34,18 @@ function getBalance() {
     })
 }
 
+function getExchangeInfo(){
+    const ts = Date.now();
+    return service.service({
+        url: '/fapi/v1/exchangeInfo',
+        method: 'get',
+        params: {
+            timestamp: ts,
+            signature: service.calcHash(params)
+        }
+    });
+}
+
 /**
  * 下单接口
  * @param params
@@ -179,6 +191,7 @@ module.exports = {
     cancelOrder,
     querySingleOrder,
     checkServerTime,
-    getAccount
+    getAccount,
+    getExchangeInfo
 }
 

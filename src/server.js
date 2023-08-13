@@ -21,23 +21,6 @@ app.use(ipFilterMiddleware);
 app.use(express.urlencoded({extended: true}));
 app.use(express.json());
 
-app.get('/', (req, res) => {
-    res.send('Hello World!')
-});
-app.get('/ping', async (req, res) => {
-    const data = await api.ping();
-    res.send(data);
-});
-app.get('/time', async (req, res) => {
-    const data = await api.checkServerTime();
-    res.send(data);
-});
-
-app.get('/account', async (req, res) => {
-    const data = await api.getAccount();
-    res.send(data);
-});
-
 // calc precision
 function calculateQuantityPrecision(price) {
     // 获取价格的小数点位数
@@ -56,11 +39,51 @@ function calculateQuantityPrecision(price) {
 function calculatePricePrecision(price) {
     // 获取价格的小数点位数
     let precision = price.toString().split('.')[1]?.length || 0;
-    if (precision >= 4) {
-        precision = 4;
+    if (precision >= 3) {
+        precision = 3;
     }
     return precision;
 }
+
+
+app.get('/', (req, res) => {
+    res.send('Hello World!')
+});
+app.get('/ping', async (req, res) => {
+    const data = await api.ping();
+    res.send(data);
+});
+app.get('/time', async (req, res) => {
+    const data = await api.checkServerTime();
+    res.send(data);
+});
+
+app.get('/account', async (req, res) => {
+    const data = await api.getAccount();
+    res.send(data);
+});
+
+app.get('/exchangeInfo', async (req, res) => {
+    // 精度信息
+    const precisionMap = {};
+    const exchangeInfo = api.getExchangeInfo();
+    const symbolsInfo = exchangeInfo['symbols'];
+    for (const symbolInfo of symbolsInfo) {
+        let tmp = {};
+        const filters = symbolInfo['filters'];
+        for (const filter of filters) {
+            if (filter['filterType'] === "PRICE_FILTER") {
+                tmp['pricePrecision'] = calculatePricePrecision(filter["tickSize"]);
+                continue;
+            }
+            if (filter['filterType'] === "LOT_SIZE") {
+                tmp['qtyPrecision'] = calculateQuantityPrecision(filter["stepSize"]);
+            }
+        }
+        precisionMap[symbolInfo['symbol']] = tmp;
+    }
+    res.send(precisionMap);
+});
 
 // 合约买入接口
 // action: long/short/closebuy/closesell
