@@ -162,6 +162,10 @@ app.post('/message', async (req, res) => {
                 params.side = "SELL";
                 break;
             case "closebuy":
+                // close 的时候无论当前仓位是否还存在，都清除掉止盈止损的挂单
+                // 1、仓位存在，直接close，清除订单
+                // 2、仓位不存在，说明已经被其中一个止盈止损单已经成交了，也清理掉另一个无用的挂单，防止重复开单
+                await cancelOrder({symbol: params.symbol});
                 if (curPosition > 0) {
                     params.quantity = curPosition;
                     params.side = "SELL";
@@ -172,6 +176,7 @@ app.post('/message', async (req, res) => {
                 }
                 break;
             case "closesell":
+                await cancelOrder({symbol: params.symbol});
                 if (curPosition < 0) {
                     params.quantity = curPosition * -1;
                     params.side = "BUY";
