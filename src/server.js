@@ -63,6 +63,12 @@ app.get('/account', async (req, res) => {
     res.send(data);
 });
 
+app.post('/cancel', async (req, res) => {
+    const body = req.body;
+    const data = await cancelOrder({symbol: body["symbol"]});
+    res.send(data);
+});
+
 app.get('/exchangeInfo', async (req, res) => {
     // 精度信息
     const precisionMap = {};
@@ -159,7 +165,6 @@ app.post('/message', async (req, res) => {
                 if (curPosition > 0) {
                     params.quantity = curPosition;
                     params.side = "SELL";
-                    await cancelOrder({symbol: params.symbol});
                 } else {
                     Log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
                     res.send(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
@@ -170,7 +175,6 @@ app.post('/message', async (req, res) => {
                 if (curPosition < 0) {
                     params.quantity = curPosition * -1;
                     params.side = "BUY";
-                    await cancelOrder({symbol: params.symbol});
                 } else {
                     Log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
                     res.send(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
@@ -183,6 +187,8 @@ app.post('/message', async (req, res) => {
                 return;
         }
 
+        // 下单前清除之前挂的止盈止损单
+        await cancelOrder({symbol: params.symbol});
         // 下单
         await api.placeOrder(params);
         // 开仓就挂上止盈止损单
