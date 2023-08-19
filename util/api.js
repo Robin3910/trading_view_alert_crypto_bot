@@ -41,7 +41,7 @@ function getExchangeInfo(){
         method: 'get',
         params: {
             timestamp: ts,
-            signature: service.calcHash(params)
+            signature: service.calcHash({timestamp: ts})
         }
     });
 }
