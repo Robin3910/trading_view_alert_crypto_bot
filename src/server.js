@@ -181,8 +181,8 @@ app.post('/message', async (req, res) => {
                     params.quantity = curPosition * -1;
                     params.side = "BUY";
                 } else {
-                    Log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
-                    res.send(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
+                    Log(`no position available|symbol:${params.symbol}|side: closesell|quantity: ${qntStr}`);
+                    res.send(`no position available|symbol:${params.symbol}|side: closesell|quantity: ${qntStr}`);
                     return;
                 }
                 break;
@@ -219,9 +219,9 @@ app.post('/message', async (req, res) => {
             });
         }
         Log(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
-        notifyToPhone(`binance_symbol_${params.symbol}_side_${body["action"]}`)
         res.send(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
     } catch (error) {
+        notifyToPhone(`bin_:${req.body.symbol}_${req.body["action"]}`);
         res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side: ${req.body["action"]}|quantity: ${req.body['quantity']}`);
     }
 });
