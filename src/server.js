@@ -39,8 +39,8 @@ function calculateQuantityPrecision(price) {
 function calculatePricePrecision(price) {
     // 获取价格的小数点位数
     let precision = price.toString().split('.')[1]?.length || 0;
-    if (precision >= 3) {
-        precision = 3;
+    if (precision >= 4) {
+        precision = 4;
     }
     return precision;
 }
@@ -72,18 +72,19 @@ app.post('/cancel', async (req, res) => {
 app.get('/exchangeInfo', async (req, res) => {
     // 精度信息
     const precisionMap = {};
-    const exchangeInfo = api.getExchangeInfo();
+    let exchangeInfo = await api.getExchangeInfo();
+    // Log(exchangeInfo);
     const symbolsInfo = exchangeInfo['symbols'];
     for (const symbolInfo of symbolsInfo) {
         let tmp = {};
         const filters = symbolInfo['filters'];
         for (const filter of filters) {
             if (filter['filterType'] === "PRICE_FILTER") {
-                tmp['pricePrecision'] = calculatePricePrecision(filter["tickSize"]);
+                tmp['pricePrecision'] = filter["tickSize"].toString().split('.')[1]?.length || 0;
                 continue;
             }
             if (filter['filterType'] === "LOT_SIZE") {
-                tmp['qtyPrecision'] = calculateQuantityPrecision(filter["stepSize"]);
+                tmp['qtyPrecision'] = filter["stepSize"].toString().split('.')[1]?.length || 0;
             }
         }
         precisionMap[symbolInfo['symbol']] = tmp;
