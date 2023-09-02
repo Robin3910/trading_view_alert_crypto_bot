@@ -95,7 +95,7 @@ app.get('/exchangeInfo', async (req, res) => {
 // 合约买入接口
 // action: long/short/closebuy/closesell
 // {
-//     "action": "long/short/closebuy/closesell",
+//     "action": "long/short/closebuy/closesell/close",
 //     "symbol": "COMPUSDT",
 //     "quantity": "0.1",
 //     "price": 57.26
@@ -162,6 +162,22 @@ app.post('/message', async (req, res) => {
                 }
                 params.side = "SELL";
                 break;
+            case "close":
+                // close 的时候无论当前仓位是否还存在，都清除掉止盈止损的挂单
+                // 1、仓位存在，直接close，清除订单
+                // 2、仓位不存在，说明已经被其中一个止盈止损单已经成交了，也清理掉另一个无用的挂单，防止重复开单
+                if (curPosition > 0) {
+                    params.quantity = curPosition;
+                    params.side = "SELL";
+                }else if (curPosition < 0){
+                    params.quantity = curPosition * -1;
+                    params.side = "BUY";
+                } else {
+                    Log(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
+                    res.send(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
+                    return;
+                }
+                break;
             case "closebuy":
                 // close 的时候无论当前仓位是否还存在，都清除掉止盈止损的挂单
                 // 1、仓位存在，直接close，清除订单
@@ -198,7 +214,7 @@ app.post('/message', async (req, res) => {
         // 下单
         await api.placeOrder(params);
         // 开仓就挂上止盈止损单
-        if (body.action === "long" || body.action === "short") {
+        if (body.slAndTp === "1" && (body.action === "long" || body.action === "short")) {
             Log(`SL/TP|symbol: ${params.symbol}|stop side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ?  (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision)}|TP:${body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision)}`);
             // 止损单
             await api.placeOrder({
