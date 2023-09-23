@@ -93,12 +93,14 @@ app.get('/exchangeInfo', async (req, res) => {
 });
 
 // 合约买入接口
-// action: long/short/closebuy/closesell
+// action: long/short/closebuy/closesell/close
 // {
 //     "action": "long/short/closebuy/closesell/close",
 //     "symbol": "COMPUSDT",
 //     "quantity": "0.1",
-//     "price": 57.26
+//     "price": 57.26,
+//     "slAndTp": 0, // 是否开启开仓后便挂止盈止损单, 0关闭，1开启
+//     "multiOrder": 0, // 是否为金字塔模式开仓，可以对同一个方向开多个订单，0关闭，1开启
 // }
 app.post('/message', async (req, res) => {
     try {
@@ -126,8 +128,8 @@ app.post('/message', async (req, res) => {
         Log(`symbol:${params.symbol}|infoQnt: ${qntStr}|curPosition: ${curPosition}`);
         switch (body.action) {
             case "long":
-                // 如果仓位存在，则跳过
-                if (curPosition > 0) {
+                // 如果仓位存在 且 当前不是金字塔类型的策略，则跳过
+                if (curPosition > 0 && !body["multiOrder"]) {
                     Log(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     return;
@@ -146,7 +148,7 @@ app.post('/message', async (req, res) => {
                 break;
             case "short":
                 // 如果仓位存在，则跳过
-                if (curPosition < 0) {
+                if (curPosition < 0 && !body["multiOrder"]) {
                     Log(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     return;
