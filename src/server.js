@@ -22,7 +22,10 @@ app.use(express.urlencoded({extended: true}));
 app.use(express.json());
 
 // calc precision
-function calculateQuantityPrecision(price) {
+function calculateQuantityPrecision(price, symbol) {
+    if (symbol === "BTCUSDT") {
+        return 3;
+    }
     // 获取价格的小数点位数
     const decimalCount = price.toString().split('.')[1]?.length || 0;
 
@@ -109,7 +112,7 @@ app.post('/message', async (req, res) => {
         params.symbol = body["symbol"];
         params.type = 'market'; // 下单类型，可以是market或limit
         let price = body["price"];
-        const precision = calculateQuantityPrecision(price);
+        const precision = calculateQuantityPrecision(price, params.symbol);
         const pricePrecision = calculatePricePrecision(price);
         params.quantity = Number(body["quantity"]).toFixed(precision);
         Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}|qty precision: ${precision}|price precision: ${pricePrecision}`);
