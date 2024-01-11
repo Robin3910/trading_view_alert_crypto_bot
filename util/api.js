@@ -8,6 +8,7 @@ function checkServerTime() {
         method: 'get'
     });
 }
+
 function ping() {
     return service.service({
         url: '/fapi/v1/ping',
@@ -86,6 +87,60 @@ function queryOrders(params) {
     })
 }
 
+/**
+ * 设置杠杆
+ * symbol
+ * leverage
+ * @returns {AxiosPromise}
+ */
+function setLevel(params) {
+    params.timestamp = Date.now();
+    return service.service({
+        url: '/fapi/v1/leverage',
+        method: 'post',
+        params: {
+            ...params,
+            signature: service.calcHash(params)
+        }
+    })
+}
+
+/**
+ * 设置仓位模式：逐仓、全仓
+ * symbol
+ * marginType
+ * @returns {AxiosPromise}
+ */
+function setMarginType(params) {
+    params.timestamp = Date.now();
+    return service.service({
+        url: '/fapi/v1/marginType',
+        method: 'post',
+        params: {
+            ...params,
+            signature: service.calcHash(params)
+        }
+    })
+}
+
+/**
+ * 调整保证金
+ * symbol
+ * amount 调整量
+ * type 1:增加逐仓保证金；2：减少逐仓保证金
+ * @returns {AxiosPromise}
+ */
+function setPositionMargin(params) {
+    params.timestamp = Date.now();
+    return service.service({
+        url: '/fapi/v1/positionMargin',
+        method: 'post',
+        params: {
+            ...params,
+            signature: service.calcHash(params)
+        }
+    })
+}
 /**
  * 查询单个挂单
  * @param params
@@ -192,6 +247,9 @@ module.exports = {
     querySingleOrder,
     checkServerTime,
     getAccount,
-    getExchangeInfo
+    getExchangeInfo,
+    setLevel,
+    setMarginType,
+    setPositionMargin
 }
 

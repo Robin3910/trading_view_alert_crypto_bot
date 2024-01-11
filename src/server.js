@@ -66,6 +66,31 @@ app.get('/account', async (req, res) => {
     res.send(data);
 });
 
+app.get('/setLevel', async (req, res) => {
+    const body = req.body;
+    const params = {};
+    params.symbol = body["symbol"];
+    params.level = body["level"];
+    const data = await api.setLevel(params);
+    res.send(data);
+});
+app.get('/setMarginType', async (req, res) => {
+    const body = req.body;
+    const params = {};
+    params.symbol = body["symbol"];
+    params.level = body["level"];
+    const data = await api.setLevel(params);
+    res.send(data);
+});
+app.get('/setPositionMargin', async (req, res) => {
+    const body = req.body;
+    const params = {};
+    params.symbol = body["symbol"];
+    params.level = body["level"];
+    const data = await api.setLevel(params);
+    res.send(data);
+});
+
 app.post('/cancel', async (req, res) => {
     const body = req.body;
     const data = await cancelOrder({symbol: body["symbol"]});
@@ -104,6 +129,10 @@ app.get('/exchangeInfo', async (req, res) => {
 //     "price": 57.26,
 //     "slAndTp": 0, // 是否开启开仓后便挂止盈止损单, 0关闭，1开启
 //     "multiOrder": 0, // 是否为金字塔模式开仓，可以对同一个方向开多个订单，0关闭，1开启
+//     "marginType": 1, // 1：ISOLATED(逐仓),2： CROSSED(全仓)。不传时默认为"全仓"。
+//     "level": 20, // 设置杠杆倍数，不传时默认为20倍杠杆。
+//     "isoMarginTimes"：3, // 逐仓时，逐仓保证金为开单保证金的X倍。比如，设置3，开单100U，则逐仓保证金为300U。不传时默认设置为3倍。
+//     "maxMarginPercent"：40, // 所有占用保证金占用总本金的比例，超过了该比例，不能再继续开单。比如，设置40，本金1000U，目前开仓占用的保证金已经超过了400U，新进入的信号不开单。
 // }
 app.post('/message', async (req, res) => {
     try {
