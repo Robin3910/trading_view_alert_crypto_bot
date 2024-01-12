@@ -193,7 +193,7 @@ async function getAccount() {
                 'Content-Type': 'application/json',
                 'X-MBX-APIKEY': CONFIG.API_KEY,
             },
-            url: `https://fapi.binance.com/fapi/v2/account?${queryString}`,
+            url: `${CONFIG.BASE_URL}/fapi/v2/account?${queryString}`,
         };
 
         axios(config)
@@ -225,7 +225,7 @@ function cancelOrder(params) {
                 'Content-Type': 'application/json',
                 'X-MBX-APIKEY': CONFIG.API_KEY,
             },
-            url: `https://fapi.binance.com/fapi/v1/allOpenOrders?${queryString}`,
+            url: `${CONFIG.BASE_URL}/fapi/v1/allOpenOrders?${queryString}`,
         };
 
         axios(config)
