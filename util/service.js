@@ -25,20 +25,14 @@ service.interceptors.request.use(config => {
     config.headers.delete['X-MBX-APIKEY'] = CONFIG.API_KEY;
     return config;
 }, error => {
-    console.log(error) // for debug
     Promise.reject(error)
 })
 
 // respone拦截器 拦截到所有的response，然后先做一些判断
 service.interceptors.response.use(
     response => {
-        // if(response.status === 200) {
-        //     return response.data;
-        // }
-        console.log(response.data);
         return Promise.resolve(response.data);
     },error => {
-        console.log('err: ' + error)// for debug
         return Promise.reject(error)
     })
 

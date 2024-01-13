@@ -68,6 +68,21 @@ function placeOrder(params) {
 }
 
 /**
+ * 查看持仓风险
+ */
+function getPositionRisk(params) {
+    const ts = Date.now();
+    return service.service({
+        url: '/fapi/v2/positionRisk',
+        method: 'get',
+        params: {
+            timestamp: ts,
+            signature: service.calcHash({timestamp: ts})
+        }
+    });
+}
+
+/**
  * 查询所有挂单
  * 挂单后需要确认当前订单已经成交了，才能进行下一步操作
  * 查询三次还未成单后，撤销订单
@@ -250,6 +265,7 @@ module.exports = {
     getExchangeInfo,
     setLevel,
     setMarginType,
-    setPositionMargin
+    setPositionMargin,
+    getPositionRisk
 }
 

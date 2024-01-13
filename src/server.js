@@ -21,6 +21,8 @@ app.use(ipFilterMiddleware);
 app.use(express.urlencoded({extended: true}));
 app.use(express.json());
 
+let symbolInfoMap = {};
+
 // calc precision
 function calculateQuantityPrecision(price, symbol) {
     if (symbol === "BTCUSDT") {
@@ -48,6 +50,29 @@ function calculatePricePrecision(price) {
     return precision;
 }
 
+async function getPositionRisk(){
+    try {
+        const params = {};
+        const data = await api.getPositionRisk(params);
+
+        for(const item of data) {
+            symbolInfoMap[item["symbol"]] = {};
+            symbolInfoMap[item["symbol"]]["leverage"] = parseInt(item["leverage"]);
+            symbolInfoMap[item["symbol"]]["marginType"] = item["marginType"] === "isolated" ? 1 : 2;
+        }
+
+    } catch (e) {
+        Log(`getPositionRisk failed`);
+    }
+    Log(`getPositionRisk success`);
+
+    // console.log(symbolInfoMap);
+}
+
+async function init() {
+    await getPositionRisk();
+}
+
 
 app.get('/', (req, res) => {
     res.send('Hello World!')
@@ -66,28 +91,29 @@ app.get('/account', async (req, res) => {
     res.send(data);
 });
 
-app.get('/setLevel', async (req, res) => {
+app.post('/setLevel', async (req, res) => {
     const body = req.body;
     const params = {};
     params.symbol = body["symbol"];
-    params.level = body["level"];
+    params.leverage = body["leverage"];
     const data = await api.setLevel(params);
     res.send(data);
 });
-app.get('/setMarginType', async (req, res) => {
+app.post('/setMarginType', async (req, res) => {
     const body = req.body;
     const params = {};
     params.symbol = body["symbol"];
-    params.level = body["level"];
-    const data = await api.setLevel(params);
+    params.marginType = body["marginType"];
+    const data = await api.setMarginType(params);
     res.send(data);
 });
-app.get('/setPositionMargin', async (req, res) => {
+app.post('/setPositionMargin', async (req, res) => {
     const body = req.body;
     const params = {};
     params.symbol = body["symbol"];
-    params.level = body["level"];
-    const data = await api.setLevel(params);
+    params.amount = body["amount"];
+    params.type = 1;
+    const data = await api.setPositionMargin(params);
     res.send(data);
 });
 
@@ -120,20 +146,69 @@ app.get('/exchangeInfo', async (req, res) => {
     res.send(precisionMap);
 });
 
+async function setSymbolInfo(symbol, marginType, leverage) {
+    if (!symbolInfoMap[symbol]) {
+        symbolInfoMap[symbol] = {};
+    }
+    try {
+        if (leverage !== symbolInfoMap[symbol]["leverage"]) {
+            const params = {};
+            params.symbol = symbol;
+            params.leverage = leverage;
+            await api.setLevel(params);
+            symbolInfoMap[symbol]["leverage"] = leverage;
+            Log(`set leverage: ${leverage} | symbol: ${symbol}`);
+        }
+
+
+        if (marginType !== symbolInfoMap[symbol]["marginType"]) {
+            const params = {};
+            params.symbol = symbol;
+            params.marginType = marginType === 1 ? "ISOLATED" : "CROSSED";
+            await api.setMarginType(params);
+            symbolInfoMap[symbol]["marginType"] = marginType;
+            Log(`set margin type: ${params.marginType} | symbol: ${symbol}`);
+        }
+
+
+    } catch (e) {
+        Log(`setSymbolInfo failed|symbol: ${symbol}|leverage: ${leverage} | marginType: ${marginType}`);
+    }
+}
+
+async function setPositionMargin(symbol, positionMargin) {
+    try {
+        const params = {};
+        params.symbol = symbol;
+        params.amount = positionMargin;
+        params.type = 1; // 1为增加保证金
+        await api.setPositionMargin(params);
+    } catch (e) {
+        Log(`setPositionMargin failed|symbol: ${symbol}|positionMargin: ${positionMargin}`);
+        return false;
+    }
+    return true;
+}
+
+function isOpenAction(action) {
+    return action === "long" || action === "short";
+}
+
 // 合约买入接口
 // action: long/short/closebuy/closesell/close
 // {
-//     "action": "long/short/closebuy/closesell/close",
+//     "action": "long/short/close",
 //     "symbol": "COMPUSDT",
 //     "quantity": "0.1",
 //     "price": 57.26,
 //     "slAndTp": 0, // 是否开启开仓后便挂止盈止损单, 0关闭，1开启
 //     "multiOrder": 0, // 是否为金字塔模式开仓，可以对同一个方向开多个订单，0关闭，1开启
 //     "marginType": 1, // 1：ISOLATED(逐仓),2： CROSSED(全仓)。不传时默认为"全仓"。
-//     "level": 20, // 设置杠杆倍数，不传时默认为20倍杠杆。
-//     "isoMarginTimes"：3, // 逐仓时，逐仓保证金为开单保证金的X倍。比如，设置3，开单100U，则逐仓保证金为300U。不传时默认设置为3倍。
+//     "leverage": 20, // 设置杠杆倍数，不传时默认为20倍杠杆。
+//     "positionMargin"：300, // 逐仓时，逐仓保证金为300U。
 //     "maxMarginPercent"：40, // 所有占用保证金占用总本金的比例，超过了该比例，不能再继续开单。比如，设置40，本金1000U，目前开仓占用的保证金已经超过了400U，新进入的信号不开单。
 // }
+
 app.post('/message', async (req, res) => {
     try {
         const body = req.body;
@@ -141,13 +216,36 @@ app.post('/message', async (req, res) => {
         params.symbol = body["symbol"];
         params.type = 'market'; // 下单类型，可以是market或limit
         let price = body["price"];
+        let account = await api.getAccount();
+        let leverage = body["leverage"] ? parseInt(body["leverage"]) : 10;
+        let marginType = body["marginType"] ? parseInt(body["marginType"]) : 2; // 默认全仓
+        // 开仓的时候才需要去判断杠杆、逐仓、逐仓保证金
+        if (isOpenAction(body.action)) {
+            let maxMarginPercent = body["maxMarginPercent"] ? parseInt(body["maxMarginPercent"]) / 100 : 0.4;
+            let availableBalance = parseInt(account["availableBalance"]);
+            let totalWalletBalance = parseInt(account["totalWalletBalance"]);
+            Log(`max margin percent: ${maxMarginPercent}, available bal: ${availableBalance}, total bal: ${totalWalletBalance}`);
+
+            // 控制仓位情况
+            if ((totalWalletBalance - availableBalance) / totalWalletBalance > maxMarginPercent) {
+                res.status(400).send(`over max margin percent|max margin percent: ${maxMarginPercent}, available bal: ${availableBalance}, total bal: ${totalWalletBalance}`);
+                return;
+            }
+
+            let setStatus = await setSymbolInfo(params.symbol, marginType, leverage);
+
+            if (!setStatus) {
+                res.status(500).send(`set info failed|symbol:${params.symbol}|marginType: ${marginType}|leverage: ${leverage}`);
+                return;
+            }
+        }
+
         const precision = calculateQuantityPrecision(price, params.symbol);
         const pricePrecision = calculatePricePrecision(price);
         params.quantity = Number(body["quantity"]).toFixed(precision);
         Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}|qty precision: ${precision}|price precision: ${pricePrecision}`);
 
-        // 获取账户信息，查看当前是否有持仓
-        const account = await api.getAccount();
+        // 查看当前是否有持仓
         const curPositionList = account["positions"];
         let curPosition = 0;
         let qntStr = "";
@@ -203,7 +301,7 @@ app.post('/message', async (req, res) => {
                 if (curPosition > 0) {
                     params.quantity = curPosition;
                     params.side = "SELL";
-                }else if (curPosition < 0){
+                } else if (curPosition < 0) {
                     params.quantity = curPosition * -1;
                     params.side = "BUY";
                 } else {
@@ -242,14 +340,21 @@ app.post('/message', async (req, res) => {
                 res.status(400).send(`order action error|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
                 return;
         }
-
         // 下单前清除之前挂的止盈止损单
-        await cancelOrder({symbol: params.symbol});
+        if (body.slAndTp) {
+            await cancelOrder({symbol: params.symbol});
+        }
+
         // 下单
         await api.placeOrder(params);
+        if (isOpenAction(body.action) && marginType === 1) {
+            let positionMargin = body["positionMargin"] ? parseInt(body["positionMargin"]) : 500;
+            // 增加保证金
+            await setPositionMargin(params.symbol, positionMargin);
+        }
         // 开仓就挂上止盈止损单
         if (body.slAndTp === "1" && (body.action === "long" || body.action === "short")) {
-            Log(`SL/TP|symbol: ${params.symbol}|stop side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ?  (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision)}|TP:${body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision)}`);
+            Log(`SL/TP|symbol: ${params.symbol}|stop side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ? (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision)}|TP:${body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision)}`);
             // 止损单
             await api.placeOrder({
                 symbol: params.symbol,
@@ -277,6 +382,8 @@ app.post('/message', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
+app.listen(port, async () => {
+    await init();
+
     Log(`Example app listening on port ${port}`)
 });
