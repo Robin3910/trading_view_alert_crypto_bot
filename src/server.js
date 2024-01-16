@@ -152,6 +152,7 @@ async function setSymbolInfo(symbol, marginType, leverage) {
     }
     try {
         if (leverage !== symbolInfoMap[symbol]["leverage"]) {
+            Log(`change leverage: wanna change to: ${leverage}|cur: ${symbolInfoMap[symbol]["leverage"]} | symbol: ${symbol}`);
             const params = {};
             params.symbol = symbol;
             params.leverage = leverage;
@@ -162,6 +163,7 @@ async function setSymbolInfo(symbol, marginType, leverage) {
 
 
         if (marginType !== symbolInfoMap[symbol]["marginType"]) {
+            Log(`change margin type, cur: ${symbolInfoMap[symbol]["marginType"]}| wanna change to: ${marginType} | symbol: ${symbol}`);
             const params = {};
             params.symbol = symbol;
             params.marginType = marginType === 1 ? "ISOLATED" : "CROSSED";
