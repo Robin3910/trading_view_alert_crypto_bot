@@ -169,11 +169,12 @@ async function setSymbolInfo(symbol, marginType, leverage) {
             symbolInfoMap[symbol]["marginType"] = marginType;
             Log(`set margin type: ${params.marginType} | symbol: ${symbol}`);
         }
-
-
+        return true;
     } catch (e) {
         Log(`setSymbolInfo failed|symbol: ${symbol}|leverage: ${leverage} | marginType: ${marginType}`);
+        return false;
     }
+    return true;
 }
 
 async function setPositionMargin(symbol, positionMargin) {
