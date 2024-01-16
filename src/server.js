@@ -64,7 +64,7 @@ async function getPositionRisk(){
     } catch (e) {
         Log(`getPositionRisk failed`);
     }
-    Log(`getPositionRisk success`);
+    Log(`getPositionRisk success|${JSON.stringify(symbolInfoMap)}`);
 
     // console.log(symbolInfoMap);
 }
@@ -166,7 +166,7 @@ async function setSymbolInfo(symbol, marginType, leverage) {
             params.symbol = symbol;
             params.marginType = marginType === 1 ? "ISOLATED" : "CROSSED";
             await api.setMarginType(params);
-            symbolInfoMap[symbol]["marginType"] = marginType;
+            symbolInfoMap[symbol]["marginType"] = params.marginType;
             Log(`set margin type: ${params.marginType} | symbol: ${symbol}`);
         }
         return true;
