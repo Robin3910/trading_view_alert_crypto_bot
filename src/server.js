@@ -168,7 +168,7 @@ async function setSymbolInfo(symbol, marginType, leverage) {
             params.symbol = symbol;
             params.marginType = marginType === 1 ? "ISOLATED" : "CROSSED";
             await api.setMarginType(params);
-            symbolInfoMap[symbol]["marginType"] = params.marginType;
+            symbolInfoMap[symbol]["marginType"] = marginType;
             Log(`set margin type: ${params.marginType} | symbol: ${symbol}`);
         }
         return true;
