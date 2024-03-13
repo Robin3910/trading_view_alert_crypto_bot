@@ -105,6 +105,15 @@ app.get('/exchangeInfo', async (req, res) => {
 //     "slAndTp": 0, // 是否开启开仓后便挂止盈止损单, 0关闭，1开启
 //     "multiOrder": 0, // 是否为金字塔模式开仓，可以对同一个方向开多个订单，0关闭，1开启
 // }
+//
+// 插针挂单与撤单
+// {
+//     "action": "pin",
+//     "symbol": "COMPUSDT",
+//     "quantity": "0.1",
+//     "price": 72000,
+//     "entry_point_percent": 30, // 挂两个单，一个buy、一个sell
+// }
 app.post('/message', async (req, res) => {
     try {
         const body = req.body;
@@ -112,6 +121,7 @@ app.post('/message', async (req, res) => {
         params.symbol = body["symbol"];
         params.type = 'market'; // 下单类型，可以是market或limit
         let price = body["price"];
+        let entry_point_percent = parseFloat(body["entry_point_percent"]);
         const precision = calculateQuantityPrecision(price, params.symbol);
         const pricePrecision = calculatePricePrecision(price);
         params.quantity = Number(body["quantity"]).toFixed(precision);
@@ -130,6 +140,32 @@ app.post('/message', async (req, res) => {
         }
         Log(`symbol:${params.symbol}|infoQnt: ${qntStr}|curPosition: ${curPosition}`);
         switch (body.action) {
+            case "pin":
+                if (curPosition !== 0) {
+                    res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                    return;
+                }
+                await cancelOrder({symbol: params.symbol});
+
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "SELL",
+                    type: "TAKE_PROFIT",
+                    stopPrice: price * (1 + entry_point_percent),
+                    price: price * (1 + entry_point_percent),
+                    quantity: params.quantity
+                });
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "BUY",
+                    type: "TAKE_PROFIT",
+                    stopPrice: price * (1 - entry_point_percent),
+                    price: price * (1 - entry_point_percent),
+                    quantity: params.quantity
+                });
+                res.status(200).send(`pin order executed successfully|symbol:${params.symbol}|quantity: ${body['quantity']}`);
+                return;
+
             case "long":
                 // 如果仓位存在 且 当前不是金字塔类型的策略，则跳过
                 if (curPosition > 0 && !body["multiOrder"]) {
@@ -243,7 +279,7 @@ app.post('/message', async (req, res) => {
         Log(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
         res.send(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
     } catch (error) {
-        notifyToPhone(`bin_:${req.body.symbol}_${req.body["action"]}`);
+        // notifyToPhone(`bin_:${req.body.symbol}_${req.body["action"]}`);
         res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side: ${req.body["action"]}|quantity: ${req.body['quantity']}`);
     }
 });
