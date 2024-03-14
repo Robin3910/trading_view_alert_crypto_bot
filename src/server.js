@@ -145,24 +145,27 @@ app.post('/message', async (req, res) => {
                     res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     return;
                 }
-                await cancelOrder({symbol: params.symbol});
+                let _ret = await cancelOrder({symbol: params.symbol});
+                console.log(_ret.msg);
 
-                await api.placeOrder({
-                    symbol: params.symbol,
-                    side: "SELL",
-                    type: "TAKE_PROFIT",
-                    stopPrice: price * (1 + entry_point_percent),
-                    price: price * (1 + entry_point_percent),
-                    quantity: params.quantity
-                });
-                await api.placeOrder({
+                // _ret = await api.placeOrder({
+                //     symbol: params.symbol,
+                //     side: "SELL",
+                //     type: "TAKE_PROFIT_MARKET",
+                //     stopPrice: price * (1 + entry_point_percent),
+                //     // price: price * (1 + entry_point_percent),
+                //     quantity: params.quantity
+                // });
+                // console.log(_ret.msg);
+                _ret = await api.placeOrder({
                     symbol: params.symbol,
                     side: "BUY",
-                    type: "TAKE_PROFIT",
-                    stopPrice: price * (1 - entry_point_percent),
-                    price: price * (1 - entry_point_percent),
+                    type: "TAKE_PROFIT_MARKET",
+                    stopPrice: (price * (1 - entry_point_percent)).toFixed(pricePrecision),
+                    // price: price * (1 - entry_point_percent),
                     quantity: params.quantity
                 });
+                console.log(_ret.msg);
                 res.status(200).send(`pin order executed successfully|symbol:${params.symbol}|quantity: ${body['quantity']}`);
                 return;
 
