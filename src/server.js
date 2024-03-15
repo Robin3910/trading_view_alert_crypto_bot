@@ -48,6 +48,18 @@ function calculatePricePrecision(price) {
     return precision;
 }
 
+function setKey(api){
+    let isValidApi = false;
+    for (const apiObj of config.KEY_LIST) {
+        if (api === apiObj.api) {
+            config.API_KEY = apiObj.api;
+            config.SECRET_KEY = apiObj.secret;
+            console.log("set api success");
+            isValidApi = true;
+        }
+    }
+    return isValidApi;
+}
 
 app.get('/', (req, res) => {
     res.send('Hello World!')
@@ -117,6 +129,11 @@ app.get('/exchangeInfo', async (req, res) => {
 app.post('/message', async (req, res) => {
     try {
         const body = req.body;
+        let apiKey = body['api'];
+        if (!setKey(apiKey)) {
+            res.status(400).send(`invalid api!`);
+            return;
+        }
         const params = {};
         params.symbol = body["symbol"];
         params.type = 'market'; // 下单类型，可以是market或limit
@@ -129,6 +146,7 @@ app.post('/message', async (req, res) => {
 
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
+        console.log(JSON.stringify(account["totalWalletBalance"]));
         const curPositionList = account["positions"];
         let curPosition = 0;
         let qntStr = "";
