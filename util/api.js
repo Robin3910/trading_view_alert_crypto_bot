@@ -14,6 +14,18 @@ function checkPositionDual() {
     })
 }
 
+function changePositionDual(params) {
+    params.timestamp = Date.now();
+    return service.service({
+        url: '/fapi/v1/positionSide/dual',
+        method: 'post',
+        params: {
+            ...params,
+            signature: service.calcHash(params)
+        }
+    })
+}
+
 function checkServerTime() {
     return service.service({
         url: '/fapi/v1/time',
@@ -205,6 +217,7 @@ module.exports = {
     checkServerTime,
     getAccount,
     getExchangeInfo,
-    checkPositionDual
+    checkPositionDual,
+    changePositionDual
 }
 

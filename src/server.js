@@ -83,6 +83,19 @@ app.get('/positiondual', async (req, res) => {
     res.send(data);
 });
 
+app.post('/changepositiondual', async (req, res) => {
+    const body = req.body;
+    let apiKey = body['api'];
+    if (!setKey(apiKey)) {
+        res.status(400).send(`invalid api!`);
+        return;
+    }
+    const params = {};
+    params.dualSidePosition = body["dualSidePosition"];
+    const data = await api.changePositionDual(params);
+    res.send(data);
+});
+
 app.get('/account', async (req, res) => {
     const apiKey = req.query["api"];
     if (!setKey(apiKey)) {
