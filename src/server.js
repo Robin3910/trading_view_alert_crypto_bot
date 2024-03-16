@@ -73,7 +73,22 @@ app.get('/time', async (req, res) => {
     res.send(data);
 });
 
+app.get('/positiondual', async (req, res) => {
+    const apiKey = req.query["api"];
+    if (!setKey(apiKey)) {
+        res.status(400).send(`invalid api!`);
+        return;
+    }
+    const data = await api.checkPositionDual();
+    res.send(data);
+});
+
 app.get('/account', async (req, res) => {
+    const apiKey = req.query["api"];
+    if (!setKey(apiKey)) {
+        res.status(400).send(`invalid api!`);
+        return;
+    }
     const data = await api.getAccount();
     res.send(data);
 });

@@ -2,6 +2,18 @@ const service = require('./service');
 const CONFIG = require('../config/config');
 const axios = require('axios');
 
+function checkPositionDual() {
+    const ts = Date.now();
+    return service.service({
+        url: '/fapi/v1/positionSide/dual',
+        method: 'get',
+        params: {
+            timestamp: ts,
+            signature: service.calcHash({timestamp: ts})
+        }
+    })
+}
+
 function checkServerTime() {
     return service.service({
         url: '/fapi/v1/time',
@@ -192,6 +204,7 @@ module.exports = {
     querySingleOrder,
     checkServerTime,
     getAccount,
-    getExchangeInfo
+    getExchangeInfo,
+    checkPositionDual
 }
 
