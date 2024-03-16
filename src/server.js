@@ -206,8 +206,9 @@ app.post('/message', async (req, res) => {
                 _ret = await api.placeOrder({
                     symbol: params.symbol,
                     side: "BUY",
-                    type: "TAKE_PROFIT_MARKET",
-                    stopPrice: (price * (1 - entry_point_percent)).toFixed(pricePrecision),
+                    type: "LIMIT",
+                    timeInForce: "GTC",
+                    price: (price * (1 - entry_point_percent)).toFixed(pricePrecision),
                     // price: price * (1 - entry_point_percent),
                     quantity: params.quantity
                 });
