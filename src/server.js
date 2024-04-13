@@ -5,7 +5,7 @@ const config = require("../config/config");
 const {Log, notifyToPhone} = require("../util/common");
 const {cancelOrder} = require("../util/api");
 const port = config.PORT;
-let symbol_map = {};
+const fs = require('fs');
 
 // IP 白名单过滤中间件
 const ipFilterMiddleware = (req, res, next) => {
@@ -21,6 +21,23 @@ const ipFilterMiddleware = (req, res, next) => {
 app.use(ipFilterMiddleware);
 app.use(express.urlencoded({extended: true}));
 app.use(express.json());
+
+function readSymbolMap() {
+    try {
+        const data = fs.readFileSync('symbol_map.data', 'utf8');
+        if (data === "") {
+            return {};
+        }
+        return JSON.parse(data);
+    } catch (err) {
+        console.error('读取或写入文件时出错:', err);
+        return {};
+    }
+}
+
+function writeSymbolMap(symbolMap){
+    fs.writeFileSync('symbol_map.data', JSON.stringify(symbolMap));
+}
 
 // calc precision
 function calculateQuantityPrecision(price, symbol) {
@@ -341,7 +358,7 @@ app.post('/doublemacd', async (req, res) => {
 
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
-        console.log(JSON.stringify(account["totalWalletBalance"]));
+        console.log("balance: " + JSON.stringify(account["totalWalletBalance"]));
         const curPositionList = account["positions"];
         let curPosition = 0;
         let qntStr = "";
@@ -351,6 +368,8 @@ app.post('/doublemacd', async (req, res) => {
                 qntStr = curPositionListElement["positionAmt"]
             }
         }
+        let symbol_map = readSymbolMap();
+
         if (!symbol_map[params.symbol]) {
             symbol_map[params.symbol] = {
                 big_direction: 0,
@@ -361,6 +380,7 @@ app.post('/doublemacd', async (req, res) => {
         if (macd_type === "big") {
             if (body.action === "buy") {
                 symbol_map[params.symbol].big_direction = 1;
+                writeSymbolMap(symbol_map);
                 if (curPosition < 0) {
                     await cancelOrder({symbol: params.symbol});
 
@@ -374,6 +394,7 @@ app.post('/doublemacd', async (req, res) => {
                 }
             } else if (body.action === "sell") {
                 symbol_map[params.symbol].big_direction = -1;
+                writeSymbolMap(symbol_map);
                 if (curPosition > 0) {
                     await cancelOrder({symbol: params.symbol});
 
