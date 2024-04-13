@@ -5,6 +5,7 @@ const config = require("../config/config");
 const {Log, notifyToPhone} = require("../util/common");
 const {cancelOrder} = require("../util/api");
 const port = config.PORT;
+let symbol_map = {};
 
 // IP 白名单过滤中间件
 const ipFilterMiddleware = (req, res, next) => {
@@ -48,7 +49,7 @@ function calculatePricePrecision(price) {
     return precision;
 }
 
-function setKey(api){
+function setKey(api) {
     let isValidApi = false;
     for (const apiObj of config.KEY_LIST) {
         if (api === apiObj.api) {
@@ -136,9 +137,9 @@ app.get('/exchangeInfo', async (req, res) => {
 });
 
 // 合约买入接口
-// action: long/short/closebuy/closesell/close
+// action: buy/sell/close
 // {
-//     "action": "long/short/closebuy/closesell/close",
+//     "action": "buy/sell/close",
 //     "symbol": "COMPUSDT",
 //     "quantity": "0.1",
 //     "price": 57.26,
@@ -216,7 +217,7 @@ app.post('/message', async (req, res) => {
                 res.status(200).send(`pin order executed successfully|symbol:${params.symbol}|quantity: ${body['quantity']}`);
                 return;
 
-            case "long":
+            case "buy":
                 // 如果仓位存在 且 当前不是金字塔类型的策略，则跳过
                 if (curPosition > 0 && !body["multiOrder"]) {
                     Log(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
@@ -235,7 +236,7 @@ app.post('/message', async (req, res) => {
                 }
                 params.side = "BUY";
                 break;
-            case "short":
+            case "sell":
                 // 如果仓位存在，则跳过
                 if (curPosition < 0 && !body["multiOrder"]) {
                     Log(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
@@ -260,37 +261,12 @@ app.post('/message', async (req, res) => {
                 if (curPosition > 0) {
                     params.quantity = curPosition;
                     params.side = "SELL";
-                }else if (curPosition < 0){
+                } else if (curPosition < 0) {
                     params.quantity = curPosition * -1;
                     params.side = "BUY";
                 } else {
                     Log(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
                     res.send(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
-                    return;
-                }
-                break;
-            case "closebuy":
-                // close 的时候无论当前仓位是否还存在，都清除掉止盈止损的挂单
-                // 1、仓位存在，直接close，清除订单
-                // 2、仓位不存在，说明已经被其中一个止盈止损单已经成交了，也清理掉另一个无用的挂单，防止重复开单
-                await cancelOrder({symbol: params.symbol});
-                if (curPosition > 0) {
-                    params.quantity = curPosition;
-                    params.side = "SELL";
-                } else {
-                    Log(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
-                    res.send(`no position available|symbol:${params.symbol}|side: closebuy|quantity: ${qntStr}`);
-                    return;
-                }
-                break;
-            case "closesell":
-                await cancelOrder({symbol: params.symbol});
-                if (curPosition < 0) {
-                    params.quantity = curPosition * -1;
-                    params.side = "BUY";
-                } else {
-                    Log(`no position available|symbol:${params.symbol}|side: closesell|quantity: ${qntStr}`);
-                    res.send(`no position available|symbol:${params.symbol}|side: closesell|quantity: ${qntStr}`);
                     return;
                 }
                 break;
@@ -306,7 +282,7 @@ app.post('/message', async (req, res) => {
         await api.placeOrder(params);
         // 开仓就挂上止盈止损单
         if (body.slAndTp === "1" && (body.action === "long" || body.action === "short")) {
-            Log(`SL/TP|symbol: ${params.symbol}|stop side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ?  (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision)}|TP:${body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision)}`);
+            Log(`SL/TP|symbol: ${params.symbol}|stop side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ? (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision)}|TP:${body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision)}`);
             // 止损单
             await api.placeOrder({
                 symbol: params.symbol,
@@ -333,6 +309,164 @@ app.post('/message', async (req, res) => {
         res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side: ${req.body["action"]}|quantity: ${req.body['quantity']}`);
     }
 });
+
+// 双macd策略接口
+// action: buy/sell/close
+// {
+//     "action": "buy/sell/close",
+//     "symbol": "COMPUSDT",
+//     "quantity": "0.1",
+//     "price": 57.26,
+//     "sl": 0, // stop loss
+//     "macd_type": "big/small", // double_macd type
+// }
+app.post('/doublemacd', async (req, res) => {
+    try {
+        const body = req.body;
+        let apiKey = body['api'];
+        if (!setKey(apiKey)) {
+            res.status(400).send(`invalid api!`);
+            return;
+        }
+        const params = {};
+        params.symbol = body["symbol"];
+        params.type = 'market'; // 下单类型，可以是market或limit
+        let price = body["price"];
+        let macd_type = body["macd_type"];
+        // let entry_point_percent = parseFloat(body["entry_point_percent"]);
+        const precision = calculateQuantityPrecision(price, params.symbol);
+        const pricePrecision = calculatePricePrecision(price);
+        params.quantity = Number(body["quantity"]).toFixed(precision);
+        Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}|macd type:${macd_type}`);
+
+        // 获取账户信息，查看当前是否有持仓
+        const account = await api.getAccount();
+        console.log(JSON.stringify(account["totalWalletBalance"]));
+        const curPositionList = account["positions"];
+        let curPosition = 0;
+        let qntStr = "";
+        for (const curPositionListElement of curPositionList) {
+            if (curPositionListElement["symbol"] === params.symbol) {
+                curPosition = parseFloat(curPositionListElement["positionAmt"]);
+                qntStr = curPositionListElement["positionAmt"]
+            }
+        }
+        if (!symbol_map[params.symbol]) {
+            symbol_map[params.symbol] = {
+                big_direction: 0,
+            };
+        }
+
+        Log(`symbol:${params.symbol}|infoQnt: ${qntStr}|curPosition: ${curPosition}`);
+        if (macd_type === "big") {
+            if (body.action === "buy") {
+                symbol_map[params.symbol].big_direction = 1;
+                if (curPosition < 0) {
+                    await cancelOrder({symbol: params.symbol});
+
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY",
+                        type: "market",
+                        quantity: curPosition * -1
+                    });
+                    Log(`big macd|buy|close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                }
+            } else if (body.action === "sell") {
+                symbol_map[params.symbol].big_direction = -1;
+                if (curPosition > 0) {
+                    await cancelOrder({symbol: params.symbol});
+
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "market",
+                        quantity: curPosition
+                    });
+                    Log(`big macd|sell|close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                }
+            }
+        } else {
+            if (body.action === "buy") {
+                if (curPosition < 0) {
+                    await cancelOrder({symbol: params.symbol});
+
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY",
+                        type: "market",
+                        quantity: curPosition * -1
+                    });
+                    Log(`small macd|buy|close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                }
+                if (curPosition > 0) {
+                    res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                    return;
+                }
+                if (symbol_map[params.symbol].big_direction === 1) {
+                    await cancelOrder({symbol: params.symbol});
+
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY",
+                        type: "market",
+                        quantity: params.quantity
+                    });
+
+                    // 止损单
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "STOP_MARKET",
+                        stopPrice: body["sl"],
+                        quantity: params.quantity
+                    });
+                }
+            } else if (body.action === "sell") {
+                if (curPosition > 0) {
+                    await cancelOrder({symbol: params.symbol});
+
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "market",
+                        quantity: curPosition
+                    });
+                    Log(`small macd|sell|close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                }
+                if (curPosition < 0) {
+                    res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                    return;
+                }
+                if (symbol_map[params.symbol].big_direction === -1) {
+                    await cancelOrder({symbol: params.symbol});
+
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "market",
+                        quantity: params.quantity
+                    });
+
+                    // 止损单
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY",
+                        type: "STOP_MARKET",
+                        stopPrice: body["sl"],
+                        quantity: params.quantity
+                    });
+                }
+            }
+        }
+        Log(`order executed successfully|macd type:${macd_type}|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
+        res.send(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
+
+    } catch (error) {
+        // notifyToPhone(`bin_:${req.body.symbol}_${req.body["action"]}`);
+        res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side: ${req.body["action"]}|quantity: ${req.body['quantity']}`);
+    }
+})
 
 app.listen(port, () => {
     Log(`Example app listening on port ${port}`)
