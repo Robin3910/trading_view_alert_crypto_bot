@@ -471,12 +471,20 @@ app.post('/doublemacd', async (req, res) => {
                     });
 
                     // 止损单
-                    await api.placeOrder({
+                    // await api.placeOrder({
+                    //     symbol: params.symbol,
+                    //     side: "BUY",
+                    //     type: "STOP_MARKET",
+                    //     stopPrice: body["sl"],
+                    //     timeInForce: "GTC",
+                    //     quantity: params.quantity
+                    // });
+                     await api.placeOrder({
                         symbol: params.symbol,
                         side: "BUY",
-                        type: "STOP_MARKET",
-                        stopPrice: body["sl"],
+                        type: "LIMIT",
                         timeInForce: "GTC",
+                        price: body['sl'],
                         quantity: params.quantity
                     });
                 }
