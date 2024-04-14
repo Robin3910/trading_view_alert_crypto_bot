@@ -440,6 +440,7 @@ app.post('/doublemacd', async (req, res) => {
                         side: "SELL",
                         type: "STOP_MARKET",
                         stopPrice: body["sl"],
+                        timeInForce: "GTC",
                         quantity: params.quantity
                     });
                 }
@@ -475,6 +476,7 @@ app.post('/doublemacd', async (req, res) => {
                         side: "BUY",
                         type: "STOP_MARKET",
                         stopPrice: body["sl"],
+                        timeInForce: "GTC",
                         quantity: params.quantity
                     });
                 }
