@@ -350,6 +350,7 @@ app.post('/doublemacd', async (req, res) => {
         params.type = 'market'; // 下单类型，可以是market或limit
         let price = body["price"];
         let macd_type = body["macd_type"];
+        let extra_params = body["sl"].split("|");
         // let entry_point_percent = parseFloat(body["entry_point_percent"]);
         const precision = calculateQuantityPrecision(price, params.symbol);
         const pricePrecision = calculatePricePrecision(price);
@@ -424,7 +425,7 @@ app.post('/doublemacd', async (req, res) => {
                     res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     return;
                 }
-                if (symbol_map[params.symbol].big_direction === 1) {
+                if (symbol_map[params.symbol].big_direction === 1 && extra_params[1] === "1") {
                     await cancelOrder({symbol: params.symbol});
 
                     await api.placeOrder({
@@ -439,7 +440,7 @@ app.post('/doublemacd', async (req, res) => {
                         symbol: params.symbol,
                         side: "SELL",
                         type: "STOP_MARKET",
-                        stopPrice: body["sl"],
+                        stopPrice: extra_params[0],
                         quantity: params.quantity
                     });
                 }
@@ -459,7 +460,7 @@ app.post('/doublemacd', async (req, res) => {
                     res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     return;
                 }
-                if (symbol_map[params.symbol].big_direction === -1) {
+                if (symbol_map[params.symbol].big_direction === -1 && extra_params[1] === "-1") {
                     await cancelOrder({symbol: params.symbol});
 
                     await api.placeOrder({
@@ -474,7 +475,7 @@ app.post('/doublemacd', async (req, res) => {
                         symbol: params.symbol,
                         side: "BUY",
                         type: "STOP_MARKET",
-                        stopPrice: body["sl"],
+                        stopPrice: extra_params[0],
                         quantity: params.quantity
                     });
                 }
