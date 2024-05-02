@@ -35,9 +35,27 @@ function readSymbolMap() {
     }
 }
 
-function writeSymbolMap(symbolMap){
+function writeSymbolMap(symbolMap) {
     fs.writeFileSync('symbol_map.data', JSON.stringify(symbolMap));
 }
+
+function readSmallSymbolCache() {
+    try {
+        const data = fs.readFileSync('small_symbol_cache.data', 'utf8');
+        if (data === "") {
+            return {};
+        }
+        return JSON.parse(data);
+    } catch (err) {
+        console.error('读取或写入文件时出错:', err);
+        return {};
+    }
+}
+
+function writeSmallSymbolCache(cache) {
+    fs.writeFileSync('small_symbol_cache.data', JSON.stringify(cache));
+}
+
 
 // calc precision
 function calculateQuantityPrecision(price, symbol) {
@@ -337,6 +355,7 @@ app.post('/message', async (req, res) => {
 //     "sl": 0, // stop loss
 //     "macd_type": "big/small", // double_macd type
 // }
+
 app.post('/doublemacd', async (req, res) => {
     try {
         const body = req.body;
@@ -357,6 +376,17 @@ app.post('/doublemacd', async (req, res) => {
         params.quantity = Number(body["quantity"]).toFixed(precision);
         Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}|macd type:${macd_type}`);
 
+        // write small macd params to cache
+        if (macd_type === "small") {
+            let cache = readSmallSymbolCache();
+            cache[params.symbol] = {
+                'quantity': params.quantity,
+                'action': body.action,
+                'extra_params': extra_params,
+                ts: Date.now()
+            };
+            writeSmallSymbolCache(cache);
+        }
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
         console.log("balance: " + JSON.stringify(account["totalWalletBalance"]));
@@ -393,6 +423,30 @@ app.post('/doublemacd', async (req, res) => {
                     });
                     Log(`big macd|buy|close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
                 }
+
+                // fix the problem: big signal arrived firstly, and then small signal arrived, but only small signal can place order
+                let cache = readSmallSymbolCache();
+                let small_symbol_cache = cache[params.symbol];
+                if (curPosition <= 0 && small_symbol_cache.action === "buy"
+                    && Date.now() - small_symbol_cache.ts < 10 * 60 * 1000 && small_symbol_cache.extra_params[1] === "1") {
+                    await cancelOrder({symbol: params.symbol});
+
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY",
+                        type: "market",
+                        quantity: small_symbol_cache.quantity
+                    });
+
+                    // 止损单
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "STOP_MARKET",
+                        stopPrice: small_symbol_cache.extra_params[0],
+                        quantity: small_symbol_cache.quantity
+                    });
+                }
             } else if (body.action === "sell") {
                 symbol_map[params.symbol].big_direction = -1;
                 writeSymbolMap(symbol_map);
@@ -406,6 +460,30 @@ app.post('/doublemacd', async (req, res) => {
                         quantity: curPosition
                     });
                     Log(`big macd|sell|close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                }
+
+                // fix the problem: big signal arrived firstly, and then small signal arrived, but only small signal can place order
+                let cache = readSmallSymbolCache();
+                let small_symbol_cache = cache[params.symbol];
+                if (curPosition >= 0 && small_symbol_cache.action === "sell"
+                    && Date.now() - small_symbol_cache.ts < 10 * 60 * 1000 && small_symbol_cache.extra_params[1] === "-1") {
+                    await cancelOrder({symbol: params.symbol});
+
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "market",
+                        quantity: small_symbol_cache.quantity
+                    });
+
+                    // 止损单
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY",
+                        type: "STOP_MARKET",
+                        stopPrice: small_symbol_cache.extra_params[0],
+                        quantity: small_symbol_cache.quantity
+                    });
                 }
             }
         } else {
