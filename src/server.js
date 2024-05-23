@@ -212,15 +212,6 @@ app.post('/message', async (req, res) => {
                 let _ret = await cancelOrder({symbol: params.symbol});
                 console.log(_ret.msg);
 
-                // _ret = await api.placeOrder({
-                //     symbol: params.symbol,
-                //     side: "SELL",
-                //     type: "TAKE_PROFIT_MARKET",
-                //     stopPrice: price * (1 + entry_point_percent),
-                //     // price: price * (1 + entry_point_percent),
-                //     quantity: params.quantity
-                // });
-                // console.log(_ret.msg);
                 _ret = await api.placeOrder({
                     symbol: params.symbol,
                     side: "BUY",
@@ -489,6 +480,92 @@ app.post('/doublemacd', async (req, res) => {
         res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side: ${req.body["action"]}|quantity: ${req.body['quantity']}`);
     }
 })
+
+// {"symbol":"{{ticker}}"
+//     ,"side":"{{strategy.order.action}}" // buy/sell
+//     ,"qty":"{{strategy.order.contracts}}"
+//     ,"price":"{{close}}"
+//     "api": "jfeiaojdieoajioji12321uj"
+// }
+app.post('/order', async (req, res) => {
+    try {
+        const body = req.body;
+        let apiKey = body['api'];
+        if (!setKey(apiKey)) {
+            res.status(400).send(`invalid api!`);
+            return;
+        }
+        const params = {};
+        params.symbol = body["symbol"];
+        params.type = 'market'; // 下单类型，可以是market或limit
+        let price = body["price"];
+        let entry_point_percent = parseFloat(body["entry_point_percent"]);
+        const precision = calculateQuantityPrecision(price, params.symbol);
+        const pricePrecision = calculatePricePrecision(price);
+        params.quantity = Number(body["quantity"]).toFixed(precision);
+        Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}|qty precision: ${precision}|price precision: ${pricePrecision}`);
+
+        // 获取账户信息，查看当前是否有持仓
+        const account = await api.getAccount();
+        console.log(JSON.stringify(account["totalWalletBalance"]));
+        const curPositionList = account["positions"];
+        let curPosition = 0;
+        let qntStr = "";
+        for (const curPositionListElement of curPositionList) {
+            if (curPositionListElement["symbol"] === params.symbol) {
+                curPosition = parseFloat(curPositionListElement["positionAmt"]);
+                qntStr = curPositionListElement["positionAmt"]
+            }
+        }
+        Log(`symbol:${params.symbol}|infoQnt: ${qntStr}|curPosition: ${curPosition}`);
+        switch (body.action) {
+            case "buy":
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "BUY",
+                    type: "market",
+                    quantity: params.quantity
+                });
+                break;
+            case "sell":
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "SELL",
+                    type: "market",
+                    quantity: params.quantity
+                });
+                break;
+        }
+
+        // 开仓就挂上止盈止损单
+        if (body.slAndTp === "1" && (body.action === "long" || body.action === "short")) {
+            Log(`SL/TP|symbol: ${params.symbol}|stop side: ${body.action === "long" ? "SELL" : "BUY"}|sl:${body.action === "long" ? (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision)}|TP:${body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision)}`);
+            // 止损单
+            await api.placeOrder({
+                symbol: params.symbol,
+                side: body.action === "long" ? "SELL" : "BUY",
+                type: "STOP",
+                stopPrice: body.action === "long" ? (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision),
+                price: body.action === "long" ? (Number(body["price"]) * (1 - config.STOP_LOSS)).toFixed(pricePrecision) : (Number(body["price"]) * (1 + config.STOP_LOSS)).toFixed(pricePrecision),
+                quantity: params.quantity
+            });
+            // 止盈单
+            await api.placeOrder({
+                symbol: params.symbol,
+                side: body.action === "long" ? "SELL" : "BUY",
+                type: "TAKE_PROFIT",
+                stopPrice: body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision),
+                price: body.action === "long" ? (Number(body["price"]) * (1 + config.STOP_PROFIT)).toFixed(pricePrecision) : (Number(body["price"]) * (1 - config.STOP_PROFIT)).toFixed(pricePrecision),
+                quantity: params.quantity
+            });
+        }
+        Log(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
+        res.send(`order executed successfully|symbol:${params.symbol}|side: ${body["action"]}|quantity: ${body['quantity']}`);
+    } catch (error) {
+        res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side: ${req.body["action"]}|quantity: ${req.body['quantity']}`);
+    }
+});
+
 
 app.listen(port, () => {
     Log(`Example app listening on port ${port}`)
