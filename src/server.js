@@ -563,29 +563,24 @@ app.post('/order', async (req, res) => {
                 break;
 
             case "allclose":
-                // if (curPosition > 0) {
-                //     params.quantity = curPosition;
-                //     params.side = "SELL";
-                // } else if (curPosition < 0) {
-                //     params.quantity = curPosition * -1;
-                //     params.side = "BUY";
-                // } else {
-                //     Log(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
-                //     res.send(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
-                //     return;
-                // }
+                if (curPosition > 0) {
+                    params.quantity = curPosition;
+                    params.side = "SELL";
+                } else if (curPosition < 0) {
+                    params.quantity = curPosition * -1;
+                    params.side = "BUY";
+                } else {
+                    Log(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
+                    res.send(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
+                    return;
+                }
                 await api.placeOrder({
                     symbol: params.symbol,
-                    side: "BUY",
+                    side: params.side,
                     type: "STOP_MARKET",
                     closePosition: true
                 });
-                await api.placeOrder({
-                    symbol: params.symbol,
-                    side: "SELL",
-                    type: "STOP_MARKET",
-                    closePosition: true
-                });
+
                 break;
         }
 
