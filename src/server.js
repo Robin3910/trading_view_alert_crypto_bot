@@ -526,7 +526,7 @@ app.post('/order', async (req, res) => {
             precision = calculateQuantityPrecision(price, params.symbol);
             pricePrecision = calculatePricePrecision(price);
         }
-        if (params.quantity) {
+        if (body["quantity"]) {
             params.quantity = Number(body["quantity"]).toFixed(precision);
         }
         Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}|qty precision: ${precision}|price precision: ${pricePrecision}`);
