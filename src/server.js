@@ -574,13 +574,15 @@ app.post('/order', async (req, res) => {
                     res.send(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
                     return;
                 }
-                await api.placeOrder({
+
+                const order_res = await api.placeOrder({
                     symbol: params.symbol,
                     side: params.side,
-                    type: "STOP_MARKET",
-                    closePosition: true
+                    type: "market",
+                    quantity: params.quantity
                 });
 
+                Log(order_res.msg);
                 break;
         }
 
