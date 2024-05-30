@@ -67,6 +67,14 @@ function calculatePricePrecision(price) {
 }
 
 function setKey(api) {
+    if (config.KEY_LIST.length === 0) {
+        return false;
+    }
+    if (api === undefined) {
+        config.API_KEY = config.KEY_LIST[0].api;
+        config.SECRET_KEY = config.KEY_LIST[0].secret;
+        return true;
+    }
     let isValidApi = false;
     for (const apiObj of config.KEY_LIST) {
         if (api === apiObj.api) {
@@ -77,6 +85,18 @@ function setKey(api) {
         }
     }
     return isValidApi;
+}
+
+function removePeriodSuffix(str) {
+    // 使用正则表达式匹配字符串末尾的".P"
+    const regex = /\.P$/;
+    // 检查字符串是否以".P"结尾
+    if (regex.test(str)) {
+        // 如果是，移除".P"
+        return str.replace(regex, '');
+    }
+    // 如果不是，返回原字符串
+    return str;
 }
 
 app.get('/', (req, res) => {
@@ -496,13 +516,19 @@ app.post('/order', async (req, res) => {
             return;
         }
         const params = {};
-        params.symbol = body["symbol"];
+        params.symbol = removePeriodSuffix(body["symbol"]);
         params.type = 'market'; // 下单类型，可以是market或limit
         let price = body["price"];
         let entry_point_percent = parseFloat(body["entry_point_percent"]);
-        const precision = calculateQuantityPrecision(price, params.symbol);
-        const pricePrecision = calculatePricePrecision(price);
-        params.quantity = Number(body["quantity"]).toFixed(precision);
+        let precision = 0;
+        let pricePrecision = 0;
+        if (price) {
+            precision = calculateQuantityPrecision(price, params.symbol);
+            pricePrecision = calculatePricePrecision(price);
+        }
+        if (params.quantity) {
+            params.quantity = Number(body["quantity"]).toFixed(precision);
+        }
         Log(`symbol:${params.symbol}|side: ${body.action}|quantity: ${params.quantity}|qty precision: ${precision}|price precision: ${pricePrecision}`);
 
         // 获取账户信息，查看当前是否有持仓
@@ -514,7 +540,7 @@ app.post('/order', async (req, res) => {
         for (const curPositionListElement of curPositionList) {
             if (curPositionListElement["symbol"] === params.symbol) {
                 curPosition = parseFloat(curPositionListElement["positionAmt"]);
-                qntStr = curPositionListElement["positionAmt"]
+                qntStr = curPositionListElement["positionAmt"];
             }
         }
         Log(`symbol:${params.symbol}|infoQnt: ${qntStr}|curPosition: ${curPosition}`);
@@ -533,6 +559,32 @@ app.post('/order', async (req, res) => {
                     side: "SELL",
                     type: "market",
                     quantity: params.quantity
+                });
+                break;
+
+            case "allclose":
+                // if (curPosition > 0) {
+                //     params.quantity = curPosition;
+                //     params.side = "SELL";
+                // } else if (curPosition < 0) {
+                //     params.quantity = curPosition * -1;
+                //     params.side = "BUY";
+                // } else {
+                //     Log(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
+                //     res.send(`no position available|symbol:${params.symbol}|side: close|quantity: ${qntStr}`);
+                //     return;
+                // }
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "BUY",
+                    type: "STOP_MARKET",
+                    closePosition: true
+                });
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "SELL",
+                    type: "STOP_MARKET",
+                    closePosition: true
                 });
                 break;
         }
