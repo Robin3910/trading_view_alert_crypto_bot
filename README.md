@@ -1,85 +1,111 @@
-# Trading View Alert Crypto Bot
+# 币安合约交易API服务
 
-基于 TradingView 信号自动在 Binance 交易的机器人。
+这是一个基于Express的REST API服务，用于对接币安合约交易所的各项功能。
 
-## 功能特点
+## 主要功能
 
-- 接收 TradingView 的警报信号
-- 自动在 Binance 执行加密货币交易
-- 支持多种交易策略
-- 实时监控交易状态
-- 自动风险管理
+### 1. 基础功能
+- IP白名单过滤
+- 多API Key管理和切换
+- 服务器状态检查 (`/ping`, `/time`)
+- 精度自动计算和处理
 
-## 安装要求
+### 2. 账户管理
+- 获取账户信息 (`/account`)
+- 切换持仓模式 (`/changepositiondual`)
+- 查询持仓信息 (`/positiondual`)
+- 获取交易对信息 (`/exchangeInfo`)
 
-- Python 3.8+
-- Binance API 密钥
-- TradingView 账户
+### 3. 交易功能
 
-## 快速开始
+#### 3.1 基础交易接口 (`/message`)
+- 支持多种交易行为：
+  - 买入/卖出
+  - 平仓
+  - 插针挂单
+- 特性：
+  - 支持市价单和限价单
+  - 自动处理仓位检查
+  - 支持止盈止损单自动挂单
+  - 支持金字塔式建仓
 
-1. 克隆仓库
-```bash
-git clone https://github.com/your-username/trading_view_alert_crypto_bot.git
+示例请求:
+```json
+{
+    "action": "buy/sell/close/pin",
+    "symbol": "BTCUSDT",
+    "quantity": "0.1",
+    "price": 57.26,
+    "slAndTp": "0",  // 是否开启止盈止损
+    "multiOrder": "0" // 是否允许同向多单
+}
 ```
 
-2. 安装依赖
-```bash
-pip install -r requirements.txt
+#### 3.2 双MACD策略接口 (`/doublemacd`)
+- 支持大小周期MACD策略
+- 自动处理仓位管理
+- 支持止损设置
+- 方向记录与追踪
+
+示例请求:
+```json
+{
+    "action": "buy/sell/close",
+    "symbol": "BTCUSDT",
+    "quantity": "0.1",
+    "price": 57.26,
+    "sl": "0",
+    "macd_type": "big/small"
+}
 ```
 
-3. 配置环境变量
+#### 3.3 TradingView策略接口 (`/order`)
+- 支持TradingView信号直接对接
+- 支持全仓位管理
+- 自动处理止盈止损
 
+### 4. 订单管理
+- 订单取消 (`/cancel`)
+- 自动清理无效订单
+- 持仓监控和管理
+
+## 安全特性
+- IP白名单控制
+- 多API密钥管理
+- 错误处理和日志记录
+- 异常通知（支持Server酱推送）
+
+## 部署说明
+
+### 环境要求
+- Node.js
+- PM2 (推荐)
+
+### 配置文件
+需要在`config/config.js`中配置以下信息：
+- API密钥列表
+- IP白名单
+- 基础URL
+- 止盈止损参数
+
+### 运行
 ```bash
-cp .env.example .env
-# 编辑 .env 文件，填入你的 Binance API 密钥
+# 直接运行
+node server.js
+
+# 使用PM2运行
+pm2 start server.js
+
+# 使用监控脚本运行
+bash process_monitor.sh
 ```
 
-## 配置说明
+## 错误处理
+- 所有API调用都有完整的错误处理
+- 异常情况会通过Server酱推送到手机
+- 详细的日志记录
 
-1. Binance API 配置
-- 在 Binance 创建 API 密钥
-- 将 API 密钥和密钥填入配置文件
-
-2. TradingView 警报设置
-- 在 TradingView 创建策略
-- 设置警报消息格式
-- 配置 Webhook URL
-
-## 使用方法
-
-1. 启动机器人
-
-```bash
-python main.py
-```
-
-可以使用nohup让机器人保持后台运行
-```bash
-nohup python main.py &
-```
-
-2. 监控日志
-
-```bash
-tail -f logs/trading.log
-```
-
-## 安全提示
-
-- 请勿分享你的 API 密钥
-- 建议先使用测试网进行测试
-- 设置合理的交易限额
-- 定期检查交易记录
-
-## 贡献指南
-
-欢迎提交 Pull Request 或创建 Issue。
-
-## 许可证
-
-MIT License
-
-## 免责声明
-
-本项目仅供学习和研究使用，作者不对使用本项目导致的任何损失负责。交易加密货币具有高风险，请谨慎使用。
+## 注意事项
+- 请确保API密钥具有足够的权限
+- 建议在正式环境使用前进行充分测试
+- 注意风险控制，合理设置止盈止损
