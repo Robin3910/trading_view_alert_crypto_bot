@@ -1,6 +1,16 @@
 // up 1, down -1
-const API_KEY = '';
-const SECRET_KEY = '';
+let API_KEY = '';
+let SECRET_KEY = '';
+const KEY_LIST = [
+    {
+        'api': '',
+        "secret": ""
+    },
+    {
+        "api": "",
+        "secret": ""
+    }
+]
 const PORT = 80;
 const STOP_LOSS = 0.02;
 const STOP_PROFIT = 0.007;
@@ -19,5 +29,6 @@ module.exports = {
     BASE_URL,
     WHITE_IP_CONFIG,
     STOP_PROFIT,
-    STOP_LOSS
+    STOP_LOSS,
+    KEY_LIST
 }

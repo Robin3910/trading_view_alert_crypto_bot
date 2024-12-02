@@ -2,6 +2,30 @@ const service = require('./service');
 const CONFIG = require('../config/config');
 const axios = require('axios');
 
+function checkPositionDual() {
+    const ts = Date.now();
+    return service.service({
+        url: '/fapi/v1/positionSide/dual',
+        method: 'get',
+        params: {
+            timestamp: ts,
+            signature: service.calcHash({timestamp: ts})
+        }
+    })
+}
+
+function changePositionDual(params) {
+    params.timestamp = Date.now();
+    return service.service({
+        url: '/fapi/v1/positionSide/dual',
+        method: 'post',
+        params: {
+            ...params,
+            signature: service.calcHash(params)
+        }
+    })
+}
+
 function checkServerTime() {
     return service.service({
         url: '/fapi/v1/time',
@@ -106,7 +130,7 @@ async function querySingleOrder(params) {
                 'Content-Type': 'application/json',
                 'X-MBX-APIKEY': CONFIG.API_KEY,
             },
-            url: `https://fapi.binance.com/fapi/v1/openOrder?${queryString}`,
+            url: `${CONFIG.BASE_URL}/fapi/v1/openOrder?${queryString}`,
         };
 
         axios(config)
@@ -138,7 +162,7 @@ async function getAccount() {
                 'Content-Type': 'application/json',
                 'X-MBX-APIKEY': CONFIG.API_KEY,
             },
-            url: `https://fapi.binance.com/fapi/v2/account?${queryString}`,
+            url: `${CONFIG.BASE_URL}/fapi/v2/account?${queryString}`,
         };
 
         axios(config)
@@ -170,7 +194,7 @@ function cancelOrder(params) {
                 'Content-Type': 'application/json',
                 'X-MBX-APIKEY': CONFIG.API_KEY,
             },
-            url: `https://fapi.binance.com/fapi/v1/allOpenOrders?${queryString}`,
+            url: `${CONFIG.BASE_URL}/fapi/v1/allOpenOrders?${queryString}`,
         };
 
         axios(config)
@@ -192,6 +216,8 @@ module.exports = {
     querySingleOrder,
     checkServerTime,
     getAccount,
-    getExchangeInfo
+    getExchangeInfo,
+    checkPositionDual,
+    changePositionDual
 }
 
