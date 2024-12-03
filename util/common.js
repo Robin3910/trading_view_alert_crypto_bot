@@ -17,8 +17,14 @@ function transTimeStampToDate(timeStamp) {
 
 function notifyToPhone(msg) {
     const config = {
-        method: 'get',
-        url: `https://sctapi.ftqq.com/SCT143186TIvKuCgmwWnzzzGQ6mE5qmyFU.send?title=${msg}`,
+        method: 'post',
+        url: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=9fd3ba17-af23-4a78-b40f-7903c89cb4bf',
+        data: {
+            "msgtype": "text",
+            "text": {
+                "content": msg
+            }
+        }
     };
 
     axios(config)

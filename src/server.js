@@ -2,10 +2,40 @@ const express = require('express');
 const app = express();
 const api = require('../util/api');
 const config = require("../config/config");
-const {Log, notifyToPhone} = require("../util/common");
+const {notifyToPhone} = require("../util/common");
 const {cancelOrder} = require("../util/api");
 const port = config.PORT;
 const fs = require('fs');
+const path = require('path');
+
+// 添加日志目录和文件配置
+const LOG_DIR = 'logs';
+const LOG_FILE = path.join(LOG_DIR, `server_${new Date().toISOString().split('T')[0]}.log`);
+
+// 确保日志目录存在
+if (!fs.existsSync(LOG_DIR)) {
+    fs.mkdirSync(LOG_DIR);
+}
+
+// 修改Log函数
+function Log(message) {
+    const timestamp = new Date().toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    const logMessage = `[${timestamp}] ${message}\n`;
+    
+    // 输出到控制台
+    console.log(message);
+    
+    // 写入文件
+    fs.appendFileSync(LOG_FILE, logMessage);
+}
 
 // IP 白名单过滤中间件
 const ipFilterMiddleware = (req, res, next) => {
@@ -24,7 +54,7 @@ app.use(express.json());
 
 function readSymbolMap() {
     try {
-        const data = fs.readFileSync('symbol_map.data', 'utf8');
+        const data = fs.readFileSync('./symbol_map.data', 'utf8');
         if (data === "") {
             return {};
         }
@@ -80,7 +110,7 @@ function setKey(api) {
         if (api === apiObj.api) {
             config.API_KEY = apiObj.api;
             config.SECRET_KEY = apiObj.secret;
-            console.log("set api success");
+            Log("set api success");
             isValidApi = true;
         }
     }
@@ -90,7 +120,7 @@ function setKey(api) {
 function removePeriodSuffix(str) {
     // 使用正则表达式匹配字符串末尾的".P"
     const regex = /\.P$/;
-    // 检查字符串是否以".P"结尾
+    // 检查字符串是否".P"结尾
     if (regex.test(str)) {
         // 如果是，移除".P"
         return str.replace(regex, '');
@@ -100,6 +130,7 @@ function removePeriodSuffix(str) {
 }
 
 app.get('/', (req, res) => {
+    Log("hello world");
     res.send('Hello World!')
 });
 app.get('/ping', async (req, res) => {
@@ -212,7 +243,7 @@ app.post('/message', async (req, res) => {
 
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
-        console.log(JSON.stringify(account["totalWalletBalance"]));
+        Log(JSON.stringify(account["totalWalletBalance"]));
         const curPositionList = account["positions"];
         let curPosition = 0;
         let qntStr = "";
@@ -230,7 +261,7 @@ app.post('/message', async (req, res) => {
                     return;
                 }
                 let _ret = await cancelOrder({symbol: params.symbol});
-                console.log(_ret.msg);
+                Log(_ret.msg);
 
                 _ret = await api.placeOrder({
                     symbol: params.symbol,
@@ -241,12 +272,12 @@ app.post('/message', async (req, res) => {
                     // price: price * (1 - entry_point_percent),
                     quantity: params.quantity
                 });
-                console.log(_ret.msg);
+                Log(_ret.msg);
                 res.status(200).send(`pin order executed successfully|symbol:${params.symbol}|quantity: ${body['quantity']}`);
                 return;
 
             case "buy":
-                // 如果仓位存在 且 当前不是金字塔类型的策略，则跳过
+                // 如果仓位存在 且 当前不是字塔类型的策略，则跳过
                 if (curPosition > 0 && !body["multiOrder"]) {
                     Log(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
@@ -370,7 +401,7 @@ app.post('/doublemacd', async (req, res) => {
 
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
-        console.log("balance: " + JSON.stringify(account["totalWalletBalance"]));
+        Log("balance: " + JSON.stringify(account["totalWalletBalance"]));
         const curPositionList = account["positions"];
         let curPosition = 0;
         let qntStr = "";
@@ -533,7 +564,7 @@ app.post('/order', async (req, res) => {
 
         // 获取账户信息，查看当前是否有持仓
         const account = await api.getAccount();
-        console.log(JSON.stringify(account["totalWalletBalance"]));
+        Log(JSON.stringify(account["totalWalletBalance"]));
         const curPositionList = account["positions"];
         let curPosition = 0;
         let qntStr = "";
@@ -616,6 +647,204 @@ app.post('/order', async (req, res) => {
 });
 
 
+
+// 三周期supertrend策略接口
+// 策略逻辑:
+// 1. 使用三个时间周期的supertrend指标:
+//    - 周期1: 日线(period=1)
+//    - 周期2: 4小时线(period=2) 
+//    - 周期3: 30分钟线(period=3)
+//
+// 2. 开仓条件:
+//    - 开多: 当日线和4小时线都是上升趋势,30分钟线由下降转上升时
+//    - 开空: 当日线和4小时线都是下降趋势,30分钟线由上升转下降时
+//
+// 3. 平仓条件:
+//    - 4小时线趋势反转时平仓:
+//      * 多单在4小时线转为下降趋势时平仓
+//      * 空单在4小时线转为上升趋势时平仓
+//
+// 请求参数说明:
+// {
+//     "symbol": "BTCUSDT",         // 交易对
+//     "quantity": "0.1",           // 交易数量
+//     "price": 57.26,              // 当前价格
+//     "period": "1/2/3",           // 1=日线,2=4h线,3=30min线
+//     "trend": "buy/sell"          // buy=买入趋势,sell=卖出趋势
+// }
+// {
+//     "symbol": "BTCUSDT",
+//     "quantity": "{{strategy.order.contracts}}",
+//     "price": "{{close}}",
+//     "period": "1",
+//     "trend": "{{strategy.order.action}}"
+// } 
+app.post('/supertrend', async (req, res) => {
+    try {
+        const body = req.body;
+        let apiKey = body['api'];
+        if (!setKey(apiKey)) {
+            res.status(400).send(`invalid api!`);
+            return;
+        }
+
+        const params = {};
+        params.symbol = body["symbol"];
+        params.type = 'market';
+        let price = body["price"];
+        let period = body["period"];
+        let trend = body["trend"];
+        
+        const precision = calculateQuantityPrecision(price, params.symbol);
+        const pricePrecision = calculatePricePrecision(price);
+        params.quantity = Number(body["quantity"]).toFixed(precision);
+        Log(`symbol:${params.symbol}|quantity:${params.quantity}|period:${period}|trend:${trend}`);
+
+        // 获取账户信息
+        const account = await api.getAccount();
+        Log("balance: " + JSON.stringify(account["totalWalletBalance"]));
+        const curPositionList = account["positions"];
+        let curPosition = 0;
+        let qntStr = "";
+        for (const curPositionListElement of curPositionList) {
+            if (curPositionListElement["symbol"] === params.symbol) {
+                curPosition = parseFloat(curPositionListElement["positionAmt"]);
+                qntStr = curPositionListElement["positionAmt"]
+            }
+        }
+
+        // 读取趋势状态映射表
+        let symbol_map = readSymbolMap();
+        if (!symbol_map[params.symbol]) {
+            // 初始化交易对的趋势状态
+            symbol_map[params.symbol] = {
+                period1_trend: "", // 日线趋势状态
+                period2_trend: "", // 4小时线趋势状态
+                period3_trend: "", // 30分钟线趋势状态
+            };
+        }
+
+        Log(`symbol:${params.symbol}|infoQnt:${qntStr}|curPosition:${curPosition}|symbol_map:${JSON.stringify(symbol_map)}`);
+
+        // 根据不同周期更新趋势状态并执行相应策略
+        if (period === "1") {
+            // 更新日线趋势状态
+            let prevTrend = symbol_map[params.symbol].period1_trend;
+            symbol_map[params.symbol].period1_trend = trend;
+            writeSymbolMap(symbol_map);
+
+            // 日线趋势反转时的平仓逻辑
+            if (prevTrend !== trend) {
+                if (trend === "sell" && curPosition > 0) {
+                    // 趋势转空,平掉多单
+                    await cancelOrder({symbol: params.symbol});
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "market",
+                        quantity: curPosition
+                    });
+                    Log(`daily trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
+                    notifyToPhone(`daily trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    return;
+                } else if (trend === "buy" && curPosition < 0) {
+                    // 趋势转多,平掉空单
+                    await cancelOrder({symbol: params.symbol});
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY", 
+                        type: "market",
+                        quantity: Math.abs(curPosition)
+                    });
+                    Log(`daily trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
+                    notifyToPhone(`daily trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    return;
+                }
+            }
+        } else if (period === "2") {
+            // 4小时线趋势状态处理
+            let prevTrend = symbol_map[params.symbol].period2_trend;
+            symbol_map[params.symbol].period2_trend = trend;
+            writeSymbolMap(symbol_map);
+
+            // 4小时线趋势反转时的平仓逻辑
+            if (prevTrend !== trend) {
+                if (trend === "sell" && curPosition > 0) {
+                    // 趋势转空,平掉多单
+                    await cancelOrder({symbol: params.symbol});
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "market",
+                        quantity: curPosition
+                    });
+                    Log(`4h trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
+                    notifyToPhone(`4h trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    return;
+                } else if (trend === "buy" && curPosition < 0) {
+                    // 趋势转多,平掉空单
+                    await cancelOrder({symbol: params.symbol});
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY",
+                        type: "market",
+                        quantity: Math.abs(curPosition)
+                    });
+                    Log(`4h trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
+                    notifyToPhone(`4h trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    return;
+                }
+            }
+        } else if (period === "3") {
+            // 30分钟线趋势状态处理
+            let prevTrend = symbol_map[params.symbol].period3_trend;
+            symbol_map[params.symbol].period3_trend = trend;
+            writeSymbolMap(symbol_map);
+
+            // 30分钟线趋势反转时的开仓逻辑
+            if (prevTrend !== trend) {
+                // 获取日线和4小时线的趋势状态
+                let period1_trend = symbol_map[params.symbol].period1_trend;
+                let period2_trend = symbol_map[params.symbol].period2_trend;
+
+                if (trend === "sell" && period1_trend === "buy" && period2_trend === "buy" && curPosition <= 0) {
+                    // 大周期趋势向上,30分钟线转空时开多单
+                    await cancelOrder({symbol: params.symbol});
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "BUY",
+                        type: "market",
+                        quantity: params.quantity
+                    });
+                    Log(`30min trend changed to sell, open long position|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    notifyToPhone(`30min trend changed to sell, open long position|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
+                } else if (trend === "buy" && period1_trend === "sell" && period2_trend === "sell" && curPosition >= 0) {
+                    // 大周期趋势向下,30分钟线转多时开空单
+                    await cancelOrder({symbol: params.symbol});
+                    await api.placeOrder({
+                        symbol: params.symbol,
+                        side: "SELL",
+                        type: "market",
+                        quantity: params.quantity
+                    });
+                    Log(`30min trend changed to buy, open short position|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
+                    notifyToPhone(`30min trend changed to buy, open short position|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
+                }
+            }
+        }
+
+        Log(`handle successfully|period:${period}|trend:${trend}|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
+        res.send(`order executed successfully|symbol:${params.symbol}|side:${body.action}|quantity:${params.quantity}`);
+
+    } catch (error) {
+        res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side:${req.body.action}|quantity:${req.body.quantity}`);
+    }
+});
+
 app.listen(port, () => {
-    Log(`Example app listening on port ${port}`)
+    Log(`app started, listening on port ${port}`);
 });
