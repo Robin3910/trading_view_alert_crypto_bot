@@ -117,7 +117,13 @@ function setKey(api) {
     return isValidApi;
 }
 
-function removePeriodSuffix(str) {
+function prefixSymbol(str) {
+    // BINANCE:BTCUSDT.P
+    // 首先处理冒号，如果存在则取后面的部分
+    if (str.includes(':')) {
+        str = str.split(':')[1];
+    }
+    
     // 使用正则表达式匹配字符串末尾的".P"
     const regex = /\.P$/;
     // 检查字符串是否".P"结尾
@@ -547,7 +553,7 @@ app.post('/order', async (req, res) => {
             return;
         }
         const params = {};
-        params.symbol = removePeriodSuffix(body["symbol"]);
+        params.symbol = prefixSymbol(body["symbol"]);
         params.type = 'market'; // 下单类型，可以是market或limit
         let price = body["price"];
         let entry_point_percent = parseFloat(body["entry_point_percent"]);
@@ -666,19 +672,12 @@ app.post('/order', async (req, res) => {
 //
 // 请求参数说明:
 // {
-//     "symbol": "BTCUSDT",         // 交易对
+//     "symbol": "BINANCE:BTCUSDT.P",         // 交易对
 //     "quantity": "0.1",           // 交易数量
 //     "price": 57.26,              // 当前价格
-//     "period": "1/2/3",           // 1=日线,2=4h线,3=30min线
-//     "trend": "buy/sell"          // buy=买入趋势,sell=卖出趋势
+//     "trend": "buy|buy|sell"          // buy=买入趋势,sell=卖出趋势，buy|buy|sell分别表示日线、4小时线、30分钟线的趋势
+//     "api": "6953af36dcec691ee0cb266cf60d13e58bcc3f9c8f9d71b8b899090e649e3898"
 // }
-// {
-//     "symbol": "BTCUSDT",
-//     "quantity": "{{strategy.order.contracts}}",
-//     "price": "{{close}}",
-//     "period": "1",
-//     "trend": "{{strategy.order.action}}"
-// } 
 app.post('/supertrend', async (req, res) => {
     try {
         const body = req.body;
@@ -689,16 +688,16 @@ app.post('/supertrend', async (req, res) => {
         }
 
         const params = {};
-        params.symbol = body["symbol"];
+        params.symbol = prefixSymbol(body["symbol"]);
         params.type = 'market';
         let price = body["price"];
-        let period = body["period"];
-        let trend = body["trend"];
+        // 解析三个周期的趋势
+        let [period1_trend, period2_trend, period3_trend] = body["trend"].split("|");
         
         const precision = calculateQuantityPrecision(price, params.symbol);
         const pricePrecision = calculatePricePrecision(price);
         params.quantity = Number(body["quantity"]).toFixed(precision);
-        Log(`symbol:${params.symbol}|quantity:${params.quantity}|period:${period}|trend:${trend}`);
+        Log(`symbol:${params.symbol}|quantity:${params.quantity}|trends:${body["trend"]}`);
 
         // 获取账户信息
         const account = await api.getAccount();
@@ -726,122 +725,110 @@ app.post('/supertrend', async (req, res) => {
 
         Log(`symbol:${params.symbol}|infoQnt:${qntStr}|curPosition:${curPosition}|symbol_map:${JSON.stringify(symbol_map)}`);
 
-        // 根据不同周期更新趋势状态并执行相应策略
-        if (period === "1") {
-            // 更新日线趋势状态
-            let prevTrend = symbol_map[params.symbol].period1_trend;
-            symbol_map[params.symbol].period1_trend = trend;
-            writeSymbolMap(symbol_map);
-
-            // 日线趋势反转时的平仓逻辑
-            if (prevTrend !== trend) {
-                if (trend === "sell" && curPosition > 0) {
-                    // 趋势转空,平掉多单
-                    await cancelOrder({symbol: params.symbol});
-                    await api.placeOrder({
-                        symbol: params.symbol,
-                        side: "SELL",
-                        type: "market",
-                        quantity: curPosition
-                    });
-                    Log(`daily trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
-                    notifyToPhone(`daily trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    return;
-                } else if (trend === "buy" && curPosition < 0) {
-                    // 趋势转多,平掉空单
-                    await cancelOrder({symbol: params.symbol});
-                    await api.placeOrder({
-                        symbol: params.symbol,
-                        side: "BUY", 
-                        type: "market",
-                        quantity: Math.abs(curPosition)
-                    });
-                    Log(`daily trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
-                    notifyToPhone(`daily trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    return;
-                }
-            }
-        } else if (period === "2") {
-            // 4小时线趋势状态处理
-            let prevTrend = symbol_map[params.symbol].period2_trend;
-            symbol_map[params.symbol].period2_trend = trend;
-            writeSymbolMap(symbol_map);
-
-            // 4小时线趋势反转时的平仓逻辑
-            if (prevTrend !== trend) {
-                if (trend === "sell" && curPosition > 0) {
-                    // 趋势转空,平掉多单
-                    await cancelOrder({symbol: params.symbol});
-                    await api.placeOrder({
-                        symbol: params.symbol,
-                        side: "SELL",
-                        type: "market",
-                        quantity: curPosition
-                    });
-                    Log(`4h trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
-                    notifyToPhone(`4h trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    return;
-                } else if (trend === "buy" && curPosition < 0) {
-                    // 趋势转多,平掉空单
-                    await cancelOrder({symbol: params.symbol});
-                    await api.placeOrder({
-                        symbol: params.symbol,
-                        side: "BUY",
-                        type: "market",
-                        quantity: Math.abs(curPosition)
-                    });
-                    Log(`4h trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
-                    notifyToPhone(`4h trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    return;
-                }
-            }
-        } else if (period === "3") {
-            // 30分钟线趋势状态处理
-            let prevTrend = symbol_map[params.symbol].period3_trend;
-            symbol_map[params.symbol].period3_trend = trend;
-            writeSymbolMap(symbol_map);
-
-            // 30分钟线趋势反转时的开仓逻辑
-            if (prevTrend !== trend) {
-                // 获取日线和4小时线的趋势状态
-                let period1_trend = symbol_map[params.symbol].period1_trend;
-                let period2_trend = symbol_map[params.symbol].period2_trend;
-
-                if (trend === "sell" && period1_trend === "buy" && period2_trend === "buy" && curPosition <= 0) {
-                    // 大周期趋势向上,30分钟线转空时开多单
-                    await cancelOrder({symbol: params.symbol});
-                    await api.placeOrder({
-                        symbol: params.symbol,
-                        side: "BUY",
-                        type: "market",
-                        quantity: params.quantity
-                    });
-                    Log(`30min trend changed to sell, open long position|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    notifyToPhone(`30min trend changed to sell, open long position|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
-                } else if (trend === "buy" && period1_trend === "sell" && period2_trend === "sell" && curPosition >= 0) {
-                    // 大周期趋势向下,30分钟线转多时开空单
-                    await cancelOrder({symbol: params.symbol});
-                    await api.placeOrder({
-                        symbol: params.symbol,
-                        side: "SELL",
-                        type: "market",
-                        quantity: params.quantity
-                    });
-                    Log(`30min trend changed to buy, open short position|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
-                    notifyToPhone(`30min trend changed to buy, open short position|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
-                }
+        // 日线趋势反转检查
+        if (period1_trend !== symbol_map[params.symbol].period1_trend) {
+            if (period1_trend === "sell" && curPosition > 0) {
+                await cancelOrder({symbol: params.symbol});
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "SELL",
+                    type: "market",
+                    quantity: curPosition
+                });
+                Log(`daily trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}`);
+                notifyToPhone(`daily trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}`);
+                symbol_map[params.symbol].period1_trend = period1_trend;
+                writeSymbolMap(symbol_map);
+                res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
+                return;
+            } else if (period1_trend === "buy" && curPosition < 0) {
+                await cancelOrder({symbol: params.symbol});
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "BUY",
+                    type: "market",
+                    quantity: Math.abs(curPosition)
+                });
+                Log(`daily trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}`);
+                notifyToPhone(`daily trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}`);
+                symbol_map[params.symbol].period1_trend = period1_trend;
+                writeSymbolMap(symbol_map);
+                res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
+                return;
             }
         }
 
-        Log(`handle successfully|period:${period}|trend:${trend}|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
-        res.send(`order executed successfully|symbol:${params.symbol}|side:${body.action}|quantity:${params.quantity}`);
+        // 4小时线趋势反转检查
+        if (period2_trend !== symbol_map[params.symbol].period2_trend) {
+            if (period2_trend === "sell" && curPosition > 0) {
+                await cancelOrder({symbol: params.symbol});
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "SELL",
+                    type: "market",
+                    quantity: curPosition
+                });
+                Log(`4h trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}`);
+                notifyToPhone(`4h trend changed to sell, close long position|symbol:${params.symbol}|curPosition:${qntStr}`);
+                symbol_map[params.symbol].period2_trend = period2_trend;
+                writeSymbolMap(symbol_map);
+                res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
+                return;
+            } else if (period2_trend === "buy" && curPosition < 0) {
+                await cancelOrder({symbol: params.symbol});
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "BUY",
+                    type: "market",
+                    quantity: Math.abs(curPosition)
+                });
+                Log(`4h trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}`);
+                notifyToPhone(`4h trend changed to buy, close short position|symbol:${params.symbol}|curPosition:${qntStr}`);
+                symbol_map[params.symbol].period2_trend = period2_trend;
+                writeSymbolMap(symbol_map);
+                res.send(`position closed successfully|symbol:${params.symbol}|quantity:${curPosition}`);
+                return;
+            }
+        }
+
+        // 30分钟线趋势反转检查和开仓逻辑
+        if (period3_trend !== symbol_map[params.symbol].period3_trend) {
+            if (period3_trend === "sell" && period1_trend === "buy" && period2_trend === "buy" && curPosition <= 0) {
+                await cancelOrder({symbol: params.symbol});
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "BUY",
+                    type: "market",
+                    quantity: params.quantity
+                });
+                Log(`30min trend changed to sell, open long position|symbol:${params.symbol}|quantity:${params.quantity}`);
+                notifyToPhone(`30min trend changed to sell, open long position|symbol:${params.symbol}|quantity:${params.quantity}`);
+            } else if (period3_trend === "buy" && period1_trend === "sell" && period2_trend === "sell" && curPosition >= 0) {
+                await cancelOrder({symbol: params.symbol});
+                await api.placeOrder({
+                    symbol: params.symbol,
+                    side: "SELL",
+                    type: "market",
+                    quantity: params.quantity
+                });
+                Log(`30min trend changed to buy, open short position|symbol:${params.symbol}|quantity:${params.quantity}`);
+                notifyToPhone(`30min trend changed to buy, open short position|symbol:${params.symbol}|quantity:${params.quantity}`);
+            }
+        }
+
+        // 更新所有周期的趋势状态
+        symbol_map[params.symbol] = {
+            period1_trend,
+            period2_trend,
+            period3_trend,
+        };
+        writeSymbolMap(symbol_map);
+
+        Log(`handle successfully|trends:${body["trend"]}|symbol:${params.symbol}|quantity:${params.quantity}|symbol_map:${JSON.stringify(symbol_map)}`);
+        res.send(`order executed successfully|symbol:${params.symbol}|quantity:${params.quantity}`);
 
     } catch (error) {
-        res.status(500).send(`Error executing order|symbol:${req.body.symbol}|side:${req.body.action}|quantity:${req.body.quantity}`);
+        res.status(500).send(`Error executing order|symbol:${req.body.symbol}|quantity:${req.body.quantity}`);
     }
 });
 
