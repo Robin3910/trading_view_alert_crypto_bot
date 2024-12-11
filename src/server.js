@@ -289,16 +289,16 @@ app.post('/message', async (req, res) => {
                     res.status(400).send(`position is already existed|symbol:${params.symbol}|curPosition: ${qntStr}`);
                     return;
                 }
-                // 建多仓前先清掉之前的空仓
-                if (curPosition < 0) {
-                    await api.placeOrder({
-                        symbol: params.symbol,
-                        side: "BUY",
-                        type: "market",
-                        quantity: curPosition * -1
-                    });
-                    Log(`close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
-                }
+                // // 建多仓前先清掉之前的空仓
+                // if (curPosition < 0) {
+                //     await api.placeOrder({
+                //         symbol: params.symbol,
+                //         side: "BUY",
+                //         type: "market",
+                //         quantity: curPosition * -1
+                //     });
+                //     Log(`close prev position|symbol:${params.symbol}|curPosition: ${qntStr}`);
+                // }
                 params.side = "BUY";
                 break;
             case "sell":
@@ -309,14 +309,14 @@ app.post('/message', async (req, res) => {
                     return;
                 }
                 // 建多仓前先清掉之前的空仓
-                if (curPosition > 0) {
-                    await api.placeOrder({
-                        symbol: params.symbol,
-                        side: "SELL",
-                        type: "market",
-                        quantity: curPosition
-                    });
-                }
+                // if (curPosition > 0) {
+                //     await api.placeOrder({
+                //         symbol: params.symbol,
+                //         side: "SELL",
+                //         type: "market",
+                //         quantity: curPosition
+                //     });
+                // }
                 params.side = "SELL";
                 break;
             case "close":
