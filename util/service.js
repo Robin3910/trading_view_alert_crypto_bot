@@ -36,6 +36,7 @@ service.interceptors.response.use(
         // if(response.status === 200) {
         //     return response.data;
         // }
+        console.log(response);
         console.log(response.data);
         return Promise.resolve(response.data);
     },error => {

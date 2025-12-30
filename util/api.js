@@ -206,6 +206,48 @@ function cancelOrder(params) {
     })
 }
 
+
+/**
+ * 下单接口V2
+ * @param params
+ * {
+ *    symbol: "ethusdt",
+ *    side: "BUY" | "SELL",
+ *    type: "LIMIT" | "MARKET" | ...,
+ *    quantity: "0.1",
+ *    price: "100",
+ *    timeInForce: "GTC",
+ *    ...
+ * }
+ * @returns {Promise}
+ */
+function placeOrderV2(params) {
+    return new Promise((resolve, reject) => {
+        params.timestamp = Date.now();
+        params.signature = service.calcHash(params);
+        const queryString = Object.keys(params).map((key) => {
+            return `${encodeURIComponent(key)}=${params[key]}`;
+        }).join('&');
+        const config = {
+            method: 'post',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-MBX-APIKEY': CONFIG.API_KEY,
+            },
+            url: `${CONFIG.BASE_URL}/fapi/v1/order?${queryString}`,
+            // data: '' // POST 请求参数均已写在url query string中，Binance要求
+        };
+
+        axios(config)
+            .then(function (response) {
+                resolve(response.data);
+            }).catch(err => {
+                resolve(err.response?.data || err);
+            });
+    });
+}
+
+
 module.exports = {
     ping,
     createListenKey,
@@ -218,6 +260,7 @@ module.exports = {
     getAccount,
     getExchangeInfo,
     checkPositionDual,
-    changePositionDual
+    changePositionDual,
+    placeOrderV2
 }
 

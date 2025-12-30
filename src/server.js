@@ -581,22 +581,28 @@ app.post('/order', async (req, res) => {
             }
         }
         Log(`symbol:${params.symbol}|infoQnt: ${qntStr}|curPosition: ${curPosition}`);
+        let res;
         switch (body.action) {
             case "buy":
-                await api.placeOrder({
+                res = await api.placeOrderV2({
                     symbol: params.symbol,
                     side: "BUY",
                     type: "market",
                     quantity: params.quantity
                 });
+                Log("PlaceOrder Response (BUY):", JSON.stringify(res));
+                console.log(res);
                 break;
             case "sell":
-                await api.placeOrder({
+                res = await api.placeOrderV2({
                     symbol: params.symbol,
                     side: "SELL",
                     type: "market",
                     quantity: params.quantity
                 });
+                Log("PlaceOrder Response (SELL):", JSON.stringify(res));
+                console.log(res);
+
                 break;
 
             case "allclose":
